@@ -25,7 +25,7 @@ class MECEnv(gym.Env):
             print("Cannot find any initial cluster for app")
 
         # Define the action and observation space
-        self.action_space = gym.spaces.Discrete(self.mec_nodes_number)  # Action space - possible action that agent can execute. it means that we can take n_mec_nodes number of actions, e.g. 1-> relocate to MEC 1, ; 2-> relocate to MEC 2
+        self.action_space = gym.spaces.Discrete(self.mec_nodes_number)
         self.observation_space = gym.spaces.Box(
             low=0,
             high=np.inf,
@@ -33,7 +33,13 @@ class MECEnv(gym.Env):
             dtype=np.float32,
         )
 
-       # self.state = self._get_state()
+        self.state = self._get_state()
+    #
+    # def _get_state(self):
+    #
+    #     state.number_of_RANs = self.number_of_RANs
+    #
+    #     return state
 
     def selectStartingNode(self):
         cnt = 0
@@ -88,9 +94,22 @@ class MECEnv(gym.Env):
         else:
             print('Error:', response.status_code)
 
+    def reset(self, mecApp, initialLoad):
 
+            # Reset the MEC nodes part of a state
+            self.mec_nodes = self.initializeMECnodes(random.randint(1, initialLoad))
+            self.mec_nodes_number = len(self.mec_nodes)
 
+            # reset number of rans -> it will remains the same over whole training
+            self.number_of_RANs = self.number_of_RANs
 
+            # app specific
+            self.mecApp = MecApp(mecApp.app_req_cpu, mecApp.app_req_memory, mecApp.app_req_latency, self.number_of_RANs)
+            self.mecApp.current_MEC = self.selectStartingNode(self, self.mecApp)
+            if self.mecApp.current_MEC is None:
+                print("Cannot find any initial cluster for app")
+
+    def step(self):
 
 
 
