@@ -9,27 +9,27 @@ from app import MecApp
 
 class MECEnv(gym.Env):
 
-    def __init__(self, mecApp):
+    def __init__(self, mecApp, initialLoad):
 
         # Initialize the MEC nodes part of a state
-        self.mec_nodes = self.initializeMECnodes()
-        self.n_mec_nodes = len(self.mec_nodes)
+        self.mec_nodes = self.initializeMECnodes(initialLoad)
+        self.mec_nodes_number = len(self.mec_nodes)
 
         # ran specific
-        self.n_rans = self.checkRANsNumber()
+        self.number_of_RANs = self.checkRANsNumber()
 
         #app specific
-        self.mecApp = MecApp(mecApp.app_req_cpu,mecApp.app_req_memory,mecApp.app_req_latency, self.n_rans)
+        self.mecApp = MecApp(mecApp.app_req_cpu, mecApp.app_req_memory, mecApp.app_req_latency, self.number_of_RANs)
         self.mecApp.current_MEC = self.selectStartingNode(self, self.mecApp)
         if self.mecApp.current_MEC is None:
             print("Cannot find any initial cluster for app")
 
         # Define the action and observation space
-        self.action_space = gym.spaces.Discrete(self.n_mec_nodes)  # Action space - possible action that agent can execute. it means that we can take n_mec_nodes number of actions, e.g. 1-> relocate to MEC 1, ; 2-> relocate to MEC 2
+        self.action_space = gym.spaces.Discrete(self.mec_nodes_number)  # Action space - possible action that agent can execute. it means that we can take n_mec_nodes number of actions, e.g. 1-> relocate to MEC 1, ; 2-> relocate to MEC 2
         self.observation_space = gym.spaces.Box(
             low=0,
             high=np.inf,
-            shape=(self.n_mec_nodes * 2, self.n_rans),
+            shape=(self.mec_nodes_number * 2, self.number_of_RANs),
             dtype=np.float32,
         )
 
@@ -56,9 +56,9 @@ class MECEnv(gym.Env):
 
 
     #number of application (as a initial load on a cluster needs to be transfered as a param, not hardcoded, but first we need to know how to pass this argument from agent
-    def initializeMECnodes(self):
+    def initializeMECnodes(self, initialLoad):
         mec_nodes = []
-        url = "http://127.0.0.1:8282/v1/topology/ml/InitialState/50"
+        url = "http://127.0.0.1:8282/v1/topology/ml/InitialState"+initialLoad
         response = requests.get(url)
 
         if response.status_code == 200:
