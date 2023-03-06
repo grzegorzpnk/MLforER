@@ -23,7 +23,7 @@ class MECEnv(gym.Env):
 
         #app specific
         self.mecApp = MecApp(mecApp.app_req_cpu, mecApp.app_req_memory, mecApp.app_req_latency, self.number_of_RANs)
-        self.mecApp.current_MEC = self.selectStartingNode(self, self.mecApp)
+        self.mecApp.current_MEC = self.selectStartingNode(self)
         if self.mecApp.current_MEC is None:
             print("Cannot find any initial cluster for app")
 
@@ -44,16 +44,7 @@ class MECEnv(gym.Env):
     #
     #     return state
 
-    def selectStartingNode(self):
-        cnt = 0
-        while True:
-            randomMecId = random.randint(1, len(self.mec_nodes))
-            randomMec = self.get_mec_node_by_id(self.mec_nodes, randomMecId)
-            if self.mecApp.LatencyOK(randomMec) and self.mecApp.ResourcesOK(randomMec):
-                return randomMec
-            if cnt > 1000:
-                return None
-            cnt += 1
+
 
     def printallMECs(self):
         print(self.mec_nodes)
@@ -89,6 +80,16 @@ class MECEnv(gym.Env):
         print(mec_nodes)
         return mec_nodes
 
+    def selectStartingNode(self):
+        cnt = 0
+        while True:
+            randomMecId = random.randint(1, len(self.mec_nodes))
+            randomMec = self.get_mec_node_by_id(self.mec_nodes, randomMecId)
+            if self.mecApp.LatencyOK(randomMec) and self.mecApp.ResourcesOK(randomMec):
+                return randomMec
+            if cnt > 1000:
+                return None
+            cnt += 1
     def checkRANsNumber(self):
         url = "http://127.0.0.1:8282/v1/topology/ml/rans"
         response = requests.get(url)
@@ -114,7 +115,13 @@ class MECEnv(gym.Env):
 
 
     def step(self, action):
-        # Take the specified action
+        # We are assuming that the constraints are already checked by agent, and actions are masked -> here we need to move application only and update the state
+        #I'm assuming that action is a ID of mec done where the application is relocated
+
+        #
+
+
+
         self._take_action(action)
 
         # Update the state of the environment
