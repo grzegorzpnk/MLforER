@@ -58,7 +58,7 @@ class MECEnv(gym.Env):
     #number of application (as a initial load on a cluster needs to be transfered as a param, not hardcoded, but first we need to know how to pass this argument from agent
     def initializeMECnodes(self, initialLoad):
         mec_nodes = []
-        url = "http://127.0.0.1:8282/v1/topology/ml/InitialState"+initialLoad
+        url = "http://127.0.0.1:8282/v1/topology/ml/InitialState/"+initialLoad
         response = requests.get(url)
 
         if response.status_code == 200:
