@@ -1,12 +1,15 @@
+import random
+import requests
 import numpy as np
 import gym
 from mec_node import MecNode
-import requests
+from app import MecApp
+
 
 
 class MECEnv(gym.Env):
 
-    def __init__(self, app_req_cpu, app_req_memory, app_req_latency):
+    def __init__(self, mecApp):
 
         # Initialize the MEC nodes part of a state
         self.mec_nodes = self.initializeMECnodes()
@@ -16,11 +19,10 @@ class MECEnv(gym.Env):
         self.n_rans = self.checkRANsNumber()
 
         #app specific
-        self.app_required_latency = app_req_latency
-        self.app_cpu_usage = app_req_cpu
-        self.app_memory_usage = app_req_memory
-        self.current_mec_node = 0 #todo: determone where the user app should be at the beggining
-
+        self.mecApp = MecApp(mecApp.app_req_cpu,mecApp.app_req_memory,mecApp.app_req_latency, self.n_rans)
+        self.mecApp.current_MEC = self.selectStartingNode(self, self.mecApp)
+        if self.mecApp.current_MEC is None:
+            print("Cannot find any initial cluster for app")
 
         # Define the action and observation space
         self.action_space = gym.spaces.Discrete(self.n_mec_nodes)  # Action space - possible action that agent can execute. it means that we can take n_mec_nodes number of actions, e.g. 1-> relocate to MEC 1, ; 2-> relocate to MEC 2
@@ -33,7 +35,27 @@ class MECEnv(gym.Env):
 
        # self.state = self._get_state()
 
+    def selectStartingNode(self):
+        cnt = 0
+        while True:
+            randomMec = self.get_mec_node_by_id(self.mec_nodes, random.randint(1, len(self.mec_nodes)))
+            if self.mecApp.LatencyOK(randomMec) and self.mecApp.ResourcesOK(randomMec):
+                return randomMec
+            if cnt > 1000:
+                return None
+            cnt += 1
 
+    def printallMECs(self):
+        print(self.mec_nodes)
+    def get_mec_node_by_id(mec_nodes, id):
+        for node in mec_nodes:
+            if node.id == id:
+                return node
+        # if the mec node with the given ID is not found, return None
+        return None
+
+
+    #number of application (as a initial load on a cluster needs to be transfered as a param, not hardcoded, but first we need to know how to pass this argument from agent
     def initializeMECnodes(self):
         mec_nodes = []
         url = "http://127.0.0.1:8282/v1/topology/ml/InitialState/50"
@@ -57,9 +79,6 @@ class MECEnv(gym.Env):
         print(mec_nodes)
         return mec_nodes
 
-    def printallMECs(self):
-        print(self.mec_nodes)
-
     def checkRANsNumber(self):
         url = "http://127.0.0.1:8282/v1/topology/ml/rans"
         response = requests.get(url)
@@ -69,17 +88,6 @@ class MECEnv(gym.Env):
         else:
             print('Error:', response.status_code)
 
-    def get_mec_node_by_id(mec_nodes, id):
-        for node in mec_nodes:
-            if node.id == id:
-                return node
-        # if the mec node with the given ID is not found, return None
-        return None
-
-
-
-myEnv = MECEnv(1, 1, 15)
-myEnv.printallMECs()
 
 
 
