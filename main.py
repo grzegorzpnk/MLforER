@@ -9,7 +9,10 @@ from app import MecApp
 
 class MECEnv(gym.Env):
 
-    def __init__(self, mecApp, initialLoad):
+    def __init__(self, mecApp, initialLoad, maxNumberOfSteps):
+
+        self.maxNumberOfSteps = maxNumberOfSteps
+        self.step = 0
 
         # Initialize the MEC nodes part of a state
         self.mec_nodes = self.initializeMECnodes(initialLoad)
@@ -44,7 +47,8 @@ class MECEnv(gym.Env):
     def selectStartingNode(self):
         cnt = 0
         while True:
-            randomMec = self.get_mec_node_by_id(self.mec_nodes, random.randint(1, len(self.mec_nodes)))
+            randomMecId = random.randint(1, len(self.mec_nodes))
+            randomMec = self.get_mec_node_by_id(self.mec_nodes, randomMecId)
             if self.mecApp.LatencyOK(randomMec) and self.mecApp.ResourcesOK(randomMec):
                 return randomMec
             if cnt > 1000:
@@ -101,15 +105,32 @@ class MECEnv(gym.Env):
             self.mec_nodes_number = len(self.mec_nodes)
 
             # reset number of rans -> it will remains the same over whole training
-            self.number_of_RANs = self.number_of_RANs
 
             # app specific
             self.mecApp = MecApp(mecApp.app_req_cpu, mecApp.app_req_memory, mecApp.app_req_latency, self.number_of_RANs)
-            self.mecApp.current_MEC = self.selectStartingNode(self, self.mecApp)
+            self.mecApp.current_MEC = self.selectStartingNode()
             if self.mecApp.current_MEC is None:
                 print("Cannot find any initial cluster for app")
 
-    def step(self):
+
+    def step(self, action):
+        # Take the specified action
+        self._take_action(action)
+
+        # Update the state of the environment
+        state = self._get_state()
+
+        # Calculate the reward based on the new state
+        reward = self._calculate_reward(state)
+
+        # Determine whether the episode is finished
+        done = False
+        self.step += self.step
+        if self.step > self.maxNumberOfSteps:
+            done = True
+
+        # Return the new state, the reward, and whether the episode is finished
+        return state, reward, done, {}
 
 
 
