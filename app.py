@@ -14,6 +14,7 @@ class MecApp:
         self.app_req_latency = app_req_latency
         self.tau = tau
         self.user_position = selectStartingUEPosition(n_rans)
+        self.current_MEC = None
 
     def LatencyOK(self, mec):
         if mec.latency_matrix[self.user_position] < self.app_req_latency:

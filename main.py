@@ -2,6 +2,8 @@ import random
 import requests
 import numpy as np
 import gym
+from gym.spaces import Discrete
+
 from mec_node import MecNode
 from app import MecApp
 
@@ -15,20 +17,21 @@ class MECEnv(gym.Env):
         self.step = 0
 
         # Initialize the MEC nodes part of a state
-        self.mec_nodes = self.initializeMECnodes(initialLoad)
+        self.mec_nodes = self._initializeMECnodes(initialLoad)
         self.mec_nodes_number = len(self.mec_nodes)
 
         # ran specific
-        self.number_of_RANs = self.checkRANsNumber()
+        self.number_of_RANs = self._checkRANsNumber()
 
         #app specific
-        self.mecApp = MecApp(mecApp.app_req_cpu, mecApp.app_req_memory, mecApp.app_req_latency, self.number_of_RANs)
-        self.mecApp.current_MEC = self.selectStartingNode(self)
+        self.mecApp = MecApp(mecApp.app_req_cpu, mecApp.app_req_memory, mecApp.app_req_latency, 0.8, self.number_of_RANs)
+        self.mecApp.current_MEC = self._selectStartingNode()
         if self.mecApp.current_MEC is None:
             print("Cannot find any initial cluster for app")
 
         # Define the action and observation space
-        self.action_space = gym.spaces.Discrete(self.mec_nodes_number)
+        #self.action_space = gym.spaces.Discrete(self.mec_nodes_number)
+        self.action_space = gym.spaces.Tuple((Discrete(self.mec_nodes_number), Discrete(self.number_of_RANs)))
         self.observation_space = gym.spaces.Box(
             low=0,
             high=np.inf,
@@ -44,20 +47,17 @@ class MECEnv(gym.Env):
     #
     #     return state
 
-
-
-    def printallMECs(self):
+    def _printAllMECs(self):
         print(self.mec_nodes)
-    def get_mec_node_by_id(mec_nodes, id):
-        for node in mec_nodes:
+
+    def _getMecNodeByID(self, id):
+        for node in self.mec_nodes:
             if node.id == id:
                 return node
         # if the mec node with the given ID is not found, return None
         return None
 
-
-    #number of application (as a initial load on a cluster needs to be transfered as a param, not hardcoded, but first we need to know how to pass this argument from agent
-    def initializeMECnodes(self, initialLoad):
+    def _initializeMECnodes(self, initialLoad):
         mec_nodes = []
         url = "http://127.0.0.1:8282/v1/topology/ml/InitialState/"+initialLoad
         response = requests.get(url)
@@ -80,17 +80,17 @@ class MECEnv(gym.Env):
         print(mec_nodes)
         return mec_nodes
 
-    def selectStartingNode(self):
+    def _selectStartingNode(self):
         cnt = 0
         while True:
             randomMecId = random.randint(1, len(self.mec_nodes))
-            randomMec = self.get_mec_node_by_id(self.mec_nodes, randomMecId)
-            if self.mecApp.LatencyOK(randomMec) and self.mecApp.ResourcesOK(randomMec):
-                return randomMec
+            if self.mecApp.LatencyOK(self._getMecNodeByID(randomMecId)) and self.mecApp.ResourcesOK(self._getMecNodeByID(randomMecId)):
+                return self._getMecNodeByID(randomMecId)
             if cnt > 1000:
                 return None
             cnt += 1
-    def checkRANsNumber(self):
+
+    def _checkRANsNumber(self):
         url = "http://127.0.0.1:8282/v1/topology/ml/rans"
         response = requests.get(url)
         if response.status_code == 200:
@@ -102,33 +102,32 @@ class MECEnv(gym.Env):
     def reset(self, mecApp, initialLoad):
 
             # Reset the MEC nodes part of a state
-            self.mec_nodes = self.initializeMECnodes(random.randint(1, initialLoad))
+            self.mec_nodes = self._initializeMECnodes(random.randint(1, initialLoad))
             self.mec_nodes_number = len(self.mec_nodes)
 
             # reset number of rans -> it will remains the same over whole training
 
             # app specific
             self.mecApp = MecApp(mecApp.app_req_cpu, mecApp.app_req_memory, mecApp.app_req_latency, self.number_of_RANs)
-            self.mecApp.current_MEC = self.selectStartingNode()
+            self.mecApp.current_MEC = self._selectStartingNode()
             if self.mecApp.current_MEC is None:
                 print("Cannot find any initial cluster for app")
 
-
-    def step(self, action):
+    def step(self, action, paramWeights):
         # We are assuming that the constraints are already checked by agent, and actions are masked -> here we need to move application only and update the state
-        #I'm assuming that action is a ID of mec done where the application is relocated
+        # I'm assuming that action is a ID of mec done where the application is relocated
 
-        #
+        # Check that the action is within the action space
+        assert self.action_space.contains(action)
 
+        self._relocateApplication(action)
 
-
-        self._take_action(action)
-
-        # Update the state of the environment
-        state = self._get_state()
+        # # Update the state of the environment
+        # state = self._get_state()
 
         # Calculate the reward based on the new state
-        reward = self._calculate_reward(state)
+        # reward = self._calculate_reward(state)
+        reward = self.calculateReward(paramWeights)
 
         # Determine whether the episode is finished
         done = False
@@ -139,11 +138,32 @@ class MECEnv(gym.Env):
         # Return the new state, the reward, and whether the episode is finished
         return state, reward, done, {}
 
+    def _relocateApplication(self, action):
+        #OLD NODE
+        currentNode = self._getMecNodeByID(self.mecApp.current_MEC.id)
+        #take care of CPU
+        currentNode.cpu_available -= self.mecApp.app_req_cpu
+        currentNode.cpu_utilization /= currentNode.cpu_capacity * 100
 
+        # take care of Memory
+        currentNode.memory_available -= self.mecApp.app_req_memory
+        currentNode.memory_capacity /= currentNode.memory_capacity * 100
 
+        #NEW NODE
+        targetNode = self._getMecNodeByID(action.targetNode)
+        # take care of CPU
+        targetNode.cpu_available -= self.mecApp.app_req_cpu
+        targetNode.cpu_utilization /= targetNode.cpu_capacity * 100
 
+        # take care of Memory
+        targetNode.memory_available -= self.mecApp.app_req_memory
+        targetNode.memory_capacity /= targetNode.memory_capacity * 100
 
+        #Application udpate
+        self.mecApp.current_MEC = targetNode
+        self.mecApp.user_position = action.uePosition
 
-
-
-
+    def calculateReward(self, paramWeights):
+        mean utlization =
+        #reward = paramWeights.LatencyWeight * nLat + paramWeights.ResourcesWeight * (paramWeights.CpuUtilizationWeight * nCpu + paramWeights.MemUtilizationWeight * nMem) * staticCost
+        return reward
