@@ -11,29 +11,26 @@ from app import MecApp
 
 class MECEnv(gym.Env):
 
-    def __init__(self, mecApp, initialLoad, maxNumberOfSteps):
+    def __init__(self, mecApp ):
 
-        self.maxNumberOfSteps = maxNumberOfSteps
         self.step = 0
 
         # Initialize the MEC nodes part of a state
-        self.mec_nodes = self._initializeMECnodes(initialLoad)
+        self.mec_nodes = self._fetchMECnodesConfig()
         self.mec_nodes_number = len(self.mec_nodes)
 
         # ran specific
         self.number_of_RANs = len(self.mec_nodes[0].latency_array)
 
-        #app specific
+        #todo: set of predefined apps needs to be defined here
         self.mecApp = MecApp(mecApp.app_req_cpu, mecApp.app_req_memory, mecApp.app_req_latency, 0.8, self.number_of_RANs)
         self.mecApp.current_MEC = self._selectStartingNode()
         if self.mecApp.current_MEC is None:
             print("Cannot find any initial cluster for app")
 
         # Define the action and observation space
-        #self.action_space = gym.spaces.Discrete(self.mec_nodes_number)
         # self.action_space = gym.spaces.Tuple((Discrete(self.mec_nodes_number), Discrete(self.number_of_RANs))) -> its commented since the next cell value will be fixed, at agent or at env side
         self.action_space = gym.spaces.Discrete(self.mec_nodes_number)
-
         self.observation_space = gym.spaces.Box(
             low=0,
             high=np.inf,
@@ -45,12 +42,12 @@ class MECEnv(gym.Env):
 
         # The observation space consists of the CPU and memory utilization and capacity of each MEC node, and the RAN where the application's user is currently located
         # Each MEC node is represented by a tuple containing its CPU utilization, CPU capacity, memory utilization, memory capacity, and the cost of placement
-        # The RAN is represented by a categorical variable
-        self.observation_space = spaces.Tuple((spaces.Tuple([spaces.Box(low=0, high=1, shape=(1,), dtype=np.int),
-                                                             spaces.Box(low=0, high=1, shape=(1,), dtype=np.int),
-                                                             ),
-                                                             spaces.Discrete(num_rans)))
-
+        # # The RAN is represented by a categorical variable
+        # self.observation_space = spaces.Tuple((spaces.Tuple([spaces.Box(low=0, high=1, shape=(1,), dtype=np.int),
+        #                                                      spaces.Box(low=0, high=1, shape=(1,), dtype=np.int),
+        #                                                      ),
+        #                                                      spaces.Discrete(num_rans)))
+        #
 
 
         self.state = self._get_state()
@@ -71,9 +68,9 @@ class MECEnv(gym.Env):
         # if the mec node with the given ID is not found, return None
         return None
 
-    def _initializeMECnodes(self, initialLoad):
+    def _fetchMECnodesConfig(self):
         mec_nodes = []
-        url = "http://127.0.0.1:8282/v1/topology/ml/InitialState/"+initialLoad
+        url = "http://127.0.0.1:8282/v1/topology/ml/InitialConfig"
         response = requests.get(url)
 
         if response.status_code == 200:
@@ -94,11 +91,6 @@ class MECEnv(gym.Env):
         print(mec_nodes)
         return mec_nodes
 
-#Episodes:
-#For each initial load
-    #FOR each trajectory
-            #For each type of application [ fixed latency, fixed resources ]
-
 
 
     def _generateInitialLoadForTopology(self):
@@ -116,7 +108,6 @@ class MECEnv(gym.Env):
 
 
 
-
     def _selectStartingNode(self):
         cnt = 0
         while True:
@@ -127,22 +118,13 @@ class MECEnv(gym.Env):
                 return None
             cnt += 1
 
-    # def _checkRANsNumber(self):
-    #     url = "http://127.0.0.1:8282/v1/topology/ml/rans"
-    #     response = requests.get(url)
-    #     if response.status_code == 200:
-    #         response_data = response.json()
-    #         return response_data
-    #     else:
-    #         print('Error:', response.status_code)
 
     def reset(self, mecApp, initialLoad):
 
             # Reset the MEC nodes part of a state
-            self.mec_nodes = self._initializeMECnodes(initialLoad)
-            self.mec_nodes_number = len(self.mec_nodes)
+            self._generateInitialLoadForTopology()
 
-            # app specific
+                        # app specific
             #todo: if the paths will be defined, so the starting cell will be known as well
             self.mecApp = MecApp(mecApp.app_req_cpu, mecApp.app_req_memory, mecApp.app_req_latency, mecApp.tau, self.number_of_RANs)
             self.mecApp.current_MEC = self._selectStartingNode()
@@ -173,9 +155,11 @@ class MECEnv(gym.Env):
         # Determine whether the episode is finished
         done = False
         self.step += self.step
+
         if self.step > self.maxNumberOfSteps:
             done = True
 
+        state = 1 # to be defined
         # Return the new state, the reward, and whether the episode is finished
         return state, reward, done, {}
 
@@ -254,3 +238,37 @@ class MECEnv(gym.Env):
         ###################### TOTAL REWARD #####################################
         reward = paramWeights.minNumberOfRelocation *  min_Number_of_relocation_reward +  paramWeights.minNumberOfRelocation * LB_reward + paramWeights.minNumberOfRelocation * placement_cost_reward
         return reward
+
+
+    def test(self):
+        Trajectory1 = [5, 7, 15, 25, 27, 29, 18, 10, 8, 1, 3, 12, 22, 25, 15, 22, 24, 33]
+        Trajectory2 = [8, 1, 3, 12, 22, 25, 27, 29, 18, 13, 26, 32, 35, 37, 39, 31, 29, 25, 15, 22, 24, 33]
+        Trajectory3 = [4, 14, 16, 23, 26, 32, 35, 42, 41, 28, 19, 17, 20, 6, 1]
+        Trajectory4 = [2, 14, 16, 23, 32, 35, 42, 41, 28, 19, 21, 20, 17, 9, 4, 7, 12, 22, 24, 33, 39]
+        Trajectory5 = [6, 1, 3, 12, 22, 25, 27, 31, 29, 25, 18, 10, 8, 1, 3, 12, 22, 25, 15, 22, 24, 33]
+        Trajectory6 = [2, 14, 16, 23, 26, 32, 35, 37, 42, 41, 28, 19, 17, 9, 4, 7, 12, 22, 25, 27, 31, 29, 25, 18, 13]
+        Trajectory7 = [9, 4, 14, 16, 23, 32, 35, 37, 42, 41, 28, 19, 21, 17, 20, 6, 2, 11, 13, 16, 23, 32, 34, 36, 31]
+        Trajectory8 = [5, 7, 15, 22, 25, 27, 31, 29, 25, 27, 12, 22, 25, 27, 31, 29, 18, 13, 26, 23, 16, 23, 32, 34, 36, 31, 29]
+        Trajectory9 = [4, 7, 12, 22, 25, 15, 22, 25, 27, 29, 18, 21, 20, 6, 9, 17, 20, 21, 19, 28, 30, 19, 21, 17]
+        Trajectory10 = [13, 23, 26, 32, 35, 42, 41, 28, 30, 19, 21, 20, 17, 9, 4, 7, 12, 22, 25, 27, 29, 25, 18, 13, 26, 23, 16, 14, 2, 11]
+
+        trajectories = [Trajectory1, Trajectory2, Trajectory3, Trajectory4, Trajectory5, Trajectory6, Trajectory7, Trajectory8, Trajectory9, Trajectory10]
+
+        #      MecApp(mecApp.app_req_cpu, mecApp.app_req_memory, mecApp.app_req_latency, 0.8, self.number_of_RANs)
+        app1 = MecApp(500, 500, 15, 0.8, self.number_of_RANs)
+
+
+    # Episodes:
+    # For each initial load
+    # FOR each trajectory
+    # For each type of application [ fixed latency, fixed resources ]
+
+#         for initial_load in range (1,10):
+#             self._generateInitialLoadForTopology()
+#             for trajectory in trajectories:
+#                 for app in self.apps:
+#
+#
+#
+# test()
+#
