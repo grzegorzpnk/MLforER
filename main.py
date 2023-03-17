@@ -11,13 +11,12 @@ from app import MecApp
 
 class MECEnv(gym.Env):
 
-    def __init__(self, mecApp ):
+    def __init__(self, mecApp):
 
-        self.step = 0
+
 
         # Initialize the MEC nodes part of a state
         self.mec_nodes = self._fetchMECnodesConfig()
-        self.mec_nodes_number = len(self.mec_nodes)
 
         # ran specific
         self.number_of_RANs = len(self.mec_nodes[0].latency_array)
@@ -29,34 +28,78 @@ class MECEnv(gym.Env):
             print("Cannot find any initial cluster for app")
 
         # Define the action and observation space
-        # self.action_space = gym.spaces.Tuple((Discrete(self.mec_nodes_number), Discrete(self.number_of_RANs))) -> its commented since the next cell value will be fixed, at agent or at env side
-        self.action_space = gym.spaces.Discrete(self.mec_nodes_number)
-        self.observation_space = gym.spaces.Box(
-            low=0,
-            high=np.inf,
-            shape=(self.mec_nodes_number * 2, self.number_of_RANs),
-            dtype=np.float32,
-        )
 
-        #alternatively:
+        self.action_space = gym.spaces.Discrete(len(self.mec_nodes))
 
-        # The observation space consists of the CPU and memory utilization and capacity of each MEC node, and the RAN where the application's user is currently located
-        # Each MEC node is represented by a tuple containing its CPU utilization, CPU capacity, memory utilization, memory capacity, and the cost of placement
-        # # The RAN is represented by a categorical variable
-        # self.observation_space = spaces.Tuple((spaces.Tuple([spaces.Box(low=0, high=1, shape=(1,), dtype=np.int),
-        #                                                      spaces.Box(low=0, high=1, shape=(1,), dtype=np.int),
-        #                                                      ),
-        #                                                      spaces.Discrete(num_rans)))
-        #
+        low_bound = np.zeros((len(self.mec_nodes), 5))  # initialize a 3x5 array filled with zeros
+        low_bound[:, 0] = 1  # Low bound of CPU Capacity is 1 ( == 4000 mvCPU)
+        low_bound[:, 1] = 0  # Low bound of CPU Utilization is 0%
+        low_bound[:, 2] = 1  # Low bound of Memory Capacity is 1 ( == 4000 mvCPU)
+        low_bound[:, 3] = 0  # Low bound of Memory Utilization is 0%
+        low_bound[:, 4] = 1  # Low bound of unit cost is 1 ( == 0.33 == city-level)
+
+        high_bound = np.ones((len(self.mec_nodes), 5))  # initialize a 3x5 array filled with zeros
+        high_bound[:, 0] = 3  # High bound of CPU Capacity is 3 ( == 12000 mvCPU)
+        high_bound[:, 1] = 100  # High bound of CPU Utilization is 100 [%]
+        high_bound[:, 2] = 3  # High bound of Memory Capacity is 3 ( == 12000 mvCPU)
+        high_bound[:, 3] = 100  # High bound of Memory Utilization is 100 [%]
+        high_bound[:, 4] = 3  # High bound of unit cost is 3 ( == 1 == international-level)
+
+        # MEC  : 1) CPU Capacity 2) CPU Utilization [%] 3) Memory Capacity 4) Memory Utilization [%] 5) Unit Cost
+        space_MEC = gym.spaces.Box(shape=low_bound.shape, dtype=np.int32, low=low_bound, high=high_bound)
+        # APP  : 1) Required mvCPU 2) required Memory 3) Required Latency 4) Current MEC 5) Current RAN
+        space_APP = gym.spaces.Tuple((gym.spaces.Discrete(3, start=2),
+                                      gym.spaces.Discrete(3, start=1),
+                                      gym.spaces.Discrete(3, start=1),
+                                      gym.spaces.Discrete(len(self.mec_nodes), start=1),
+                                      gym.spaces.Discrete(self.number_of_RANs, start=1),))
+
+        obs_box = gym.spaces.Tuple((space_MEC, space_APP))
+
+        self.state = None
+
+    def _get_state(self):
+        space_MEC = np.zeros((len(self.mec_nodes), 5))
+
+        # MEC  : 0) CPU Capacity 1) CPU Utilization [%] 2) Memory Capacity 3) Memory Utilization [%] 4) Unit Cost
+        for i, mec_node in enumerate(self.mec_nodes):
+            space_MEC[i, 0] = self.determineStateOfCPUCapacity(mec_node.cpu_capacity)
+            space_MEC[i, 1] = mec_node.cpu_utilization
+            space_MEC[i, 2] = self.determineStateOfMemoryCapacity(mec_node.memory_capacity)
+            space_MEC[i, 3] = mec_node.memory_utilization
+            space_MEC[i, 4] = self.determineStateofCost(mec_node.placement_cost)
+
+        # APP  : 1) Required mvCPU 2) required Memory 3) Required Latency 4) Current MEC 5) Current RAN
+        space_APP = (self.mecApp.app_req_cpu, self.mecApp.app_req_memory, self.mecApp.app_req_latency, self.mecApp.current_MEC, self.mecApp.user_position)
+
+        state = gym.spaces.Tuple((space_MEC, space_APP))
+        return state
 
 
-        self.state = self._get_state()
-    #
-    # def _get_state(self):
-    #
-    #     state.number_of_RANs = self.number_of_RANs
-    #
-    #     return state
+    def determineStateOfCPUCapacity(cpu_capacity):
+        if cpu_capacity == 4000:
+            return 1
+        if cpu_capacity == 8000:
+            return 2
+        if cpu_capacity == 12000:
+            return 3
+
+    def determineStateOfMemoryCapacity(memory_capacity):
+        if memory_capacity == 4000:
+            return 1
+        if memory_capacity == 8000:
+            return 2
+        if memory_capacity == 12000:
+            return 3
+
+    def determineStateofCost(placement_cost):
+        if placement_cost == 0.33333:
+            return 1
+        if placement_cost == 0.6667:
+            return 2
+        if placement_cost == 1:
+            return 3
+
 
     def _printAllMECs(self):
         print(self.mec_nodes)
@@ -119,9 +162,9 @@ class MECEnv(gym.Env):
             cnt += 1
 
 
-    def reset(self, mecApp, initialLoad):
+    def reset(self, mecApp):
 
-            # Reset the MEC nodes part of a state
+            self.step = 0
             self._generateInitialLoadForTopology()
 
                         # app specific
@@ -130,6 +173,8 @@ class MECEnv(gym.Env):
             self.mecApp.current_MEC = self._selectStartingNode()
             if self.mecApp.current_MEC is None:
                 print("Cannot find any initial cluster for app")
+
+            return self._get_state()
 
     def step(self, action, paramWeights):
         '''
@@ -159,7 +204,8 @@ class MECEnv(gym.Env):
         if self.step > self.maxNumberOfSteps:
             done = True
 
-        state = 1 # to be defined
+        state = self._get_state()
+
         # Return the new state, the reward, and whether the episode is finished
         return state, reward, done, {}
 
