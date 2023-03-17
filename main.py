@@ -13,8 +13,6 @@ class MECEnv(gym.Env):
 
     def __init__(self, mecApp):
 
-
-
         # Initialize the MEC nodes part of a state
         self.mec_nodes = self._fetchMECnodesConfig()
 
@@ -48,7 +46,7 @@ class MECEnv(gym.Env):
         # MEC  : 1) CPU Capacity 2) CPU Utilization [%] 3) Memory Capacity 4) Memory Utilization [%] 5) Unit Cost
         space_MEC = gym.spaces.Box(shape=low_bound.shape, dtype=np.int32, low=low_bound, high=high_bound)
         # APP  : 1) Required mvCPU 2) required Memory 3) Required Latency 4) Current MEC 5) Current RAN
-        space_APP = gym.spaces.Tuple((gym.spaces.Discrete(3, start=2),
+        space_APP = gym.spaces.Tuple((gym.spaces.Discrete(3, start=1),
                                       gym.spaces.Discrete(3, start=1),
                                       gym.spaces.Discrete(3, start=1),
                                       gym.spaces.Discrete(len(self.mec_nodes), start=1),
@@ -63,42 +61,55 @@ class MECEnv(gym.Env):
 
         # MEC  : 0) CPU Capacity 1) CPU Utilization [%] 2) Memory Capacity 3) Memory Utilization [%] 4) Unit Cost
         for i, mec_node in enumerate(self.mec_nodes):
-            space_MEC[i, 0] = self.determineStateOfCPUCapacity(mec_node.cpu_capacity)
+            space_MEC[i, 0] = self.determineStateOfCapacity(mec_node.cpu_capacity)
             space_MEC[i, 1] = mec_node.cpu_utilization
-            space_MEC[i, 2] = self.determineStateOfMemoryCapacity(mec_node.memory_capacity)
+            space_MEC[i, 2] = self.determineStateOfCapacity(mec_node.memory_capacity)
             space_MEC[i, 3] = mec_node.memory_utilization
             space_MEC[i, 4] = self.determineStateofCost(mec_node.placement_cost)
 
         # APP  : 1) Required mvCPU 2) required Memory 3) Required Latency 4) Current MEC 5) Current RAN
-        space_APP = (self.mecApp.app_req_cpu, self.mecApp.app_req_memory, self.mecApp.app_req_latency, self.mecApp.current_MEC, self.mecApp.user_position)
+        space_APP = (self.determineStateofAppReq(self.mecApp.app_req_cpu),
+                     self.determineStateofAppReq(self.mecApp.app_req_memory),
+                     self.determineStateofAppLatReq(self.mecApp.app_req_latency),
+                     self.mecApp.current_MEC.id,
+                     self.mecApp.user_position)
+
 
         state = gym.spaces.Tuple((space_MEC, space_APP))
         return state
 
-
-    def determineStateOfCPUCapacity(cpu_capacity):
-        if cpu_capacity == 4000:
+    def determineStateOfCapacity(self, capacityValue):
+        if capacityValue == 4000:
             return 1
-        if cpu_capacity == 8000:
+        if capacityValue == 8000:
             return 2
-        if cpu_capacity == 12000:
+        if capacityValue == 12000:
             return 3
 
-    def determineStateOfMemoryCapacity(memory_capacity):
-        if memory_capacity == 4000:
-            return 1
-        if memory_capacity == 8000:
-            return 2
-        if memory_capacity == 12000:
-            return 3
-
-    def determineStateofCost(placement_cost):
+    def determineStateofCost(self, placement_cost):
         if placement_cost == 0.33333:
             return 1
         if placement_cost == 0.6667:
             return 2
         if placement_cost == 1:
             return 3
+
+    def determineStateofAppReq(self, reqValue):
+        if reqValue == 300:
+            return 1
+        if reqValue == 400:
+            return 2
+        if reqValue == 500:
+            return 3
+
+    def determineStateofAppLatReq(self, latValue):
+        if latValue == 10:
+            return 1
+        if latValue == 15:
+            return 2
+        if latValue == 25:
+            return 3
+
 
 
     def _printAllMECs(self):
