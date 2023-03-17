@@ -18,35 +18,19 @@ The action space consists of a discrete set of values, where each value correspo
 
 The observation space of this custom environment in OpenAI Gym is defined by the `obs_box` object, which is a tuple of two sub-spaces:
 
-       
-       ` # APP  : 1) Required mvCPU 2) required Memory 3) Required Latency 4) Current MEC 5) Current RAN
+`# MEC  : 1) CPU Capacity 2) CPU Utilization [%] 3) Memory Capacity 4) Memory Utilization [%] 5) Unit Cost
+        space_MEC = gym.spaces.Box(shape=low_bound.shape, dtype=np.int32, low=low_bound, high=high_bound)
+        # APP  : 1) Required mvCPU 2) required Memory 3) Required Latency 4) Current MEC 5) Current RAN
         space_APP = gym.spaces.Tuple((gym.spaces.Discrete(3, start=1),
                                       gym.spaces.Discrete(3, start=1),
                                       gym.spaces.Discrete(3, start=1),
                                       gym.spaces.Discrete(len(self.mec_nodes), start=1),
-                                      gym.spaces.Discrete(self.number_of_RANs, start=1),))`
+                                      gym.spaces.Discrete(self.number_of_RANs, start=1),))
 
         obs_box = gym.spaces.Tuple((space_MEC, space_APP))
-
+`
 
 ### MEC infra Sub-Space
-
-` low_bound = np.zeros((len(self.mec_nodes), 5))  # initialize a 3x5 array filled with zeros
-        low_bound[:, 0] = 1  # Low bound of CPU Capacity is 1 ( == 4000 mvCPU)
-        low_bound[:, 1] = 0  # Low bound of CPU Utilization is 0%
-        low_bound[:, 2] = 1  # Low bound of Memory Capacity is 1 ( == 4000 mvCPU)
-        low_bound[:, 3] = 0  # Low bound of Memory Utilization is 0%
-        low_bound[:, 4] = 1  # Low bound of unit cost is 1 ( == 0.33 == city-level)
-
-        high_bound = np.ones((len(self.mec_nodes), 5))  # initialize a 3x5 array filled with zeros
-        high_bound[:, 0] = 3  # High bound of CPU Capacity is 3 ( == 12000 mvCPU)
-        high_bound[:, 1] = 100  # High bound of CPU Utilization is 100 [%]
-        high_bound[:, 2] = 3  # High bound of Memory Capacity is 3 ( == 12000 mvCPU)
-        high_bound[:, 3] = 100  # High bound of Memory Utilization is 100 [%]
-        high_bound[:, 4] = 3  # High bound of unit cost is 3 ( == 1 == international-level)
-
-        # MEC  : 1) CPU Capacity 2) CPU Utilization [%] 3) Memory Capacity 4) Memory Utilization [%] 5) Unit Cost
-        space_MEC = gym.spaces.Box(shape=low_bound.shape, dtype=np.int32, low=low_bound, high=high_bound)`
         
 The first sub-space represents the current state of all MEC nodes in the network. It is a `Box` space, a 2-dimensional array with a shape of `(number_of_MEC_nodes, 5)` and a data type of `np.int32`. The five dimensions of this sub-space correspond to the following attributes of each MEC node:
 
