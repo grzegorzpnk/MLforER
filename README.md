@@ -18,18 +18,6 @@ The action space consists of a discrete set of values, where each value correspo
 
 The observation space of this custom environment in OpenAI Gym is defined by the `obs_box` object, which is a tuple of two sub-spaces:
 
-`# MEC  : 1) CPU Capacity 2) CPU Utilization [%] 3) Memory Capacity 4) Memory Utilization [%] 5) Unit Cost
-        space_MEC = gym.spaces.Box(shape=low_bound.shape, dtype=np.int32, low=low_bound, high=high_bound)
-        # APP  : 1) Required mvCPU 2) required Memory 3) Required Latency 4) Current MEC 5) Current RAN
-        space_APP = gym.spaces.Tuple((gym.spaces.Discrete(3, start=1),
-                                      gym.spaces.Discrete(3, start=1),
-                                      gym.spaces.Discrete(3, start=1),
-                                      gym.spaces.Discrete(len(self.mec_nodes), start=1),
-                                      gym.spaces.Discrete(self.number_of_RANs, start=1),))
-
-        obs_box = gym.spaces.Tuple((space_MEC, space_APP))
-`
-
 ### MEC infra Sub-Space
         
 The first sub-space represents the current state of all MEC nodes in the network. It is a `Box` space, a 2-dimensional array with a shape of `(number_of_MEC_nodes, 5)` and a data type of `np.int32`. The five dimensions of this sub-space correspond to the following attributes of each MEC node:
