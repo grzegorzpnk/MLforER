@@ -2,6 +2,18 @@
 This repo contains Rainforcement Learning training model for Edge Relocation
 Details about what Edge Relocation is can be found [here](https://ieeexplore.ieee.org/document/9779643) 
 
+
+## Action Space Documentation
+
+The action space for the custom environment in AI gym is defined as follows:
+
+python
+
+`self.action_space = gym.spaces.Discrete(len(self.mec_nodes))` 
+
+The action space consists of a discrete set of values, where each value corresponds to the index of MEC node that the agent will choose to relocate application to. The number of possible actions is equal to the number of MEC nodes available in the environment.
+
+
 ## Observation Space
 
 The observation space of this custom environment in OpenAI Gym is defined by the `obs_box` object, which is a tuple of two sub-spaces:
