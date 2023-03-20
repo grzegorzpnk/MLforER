@@ -1,4 +1,6 @@
 import random
+from abc import ABC
+
 import requests
 import numpy as np
 import gym
@@ -8,29 +10,31 @@ from mec_node import MecNode
 from app import MecApp
 
 
-
 class MECEnv(gym.Env):
 
     def __init__(self):
 
+        # read initial topology config from external simulator
         self.mec_nodes = self._fetchMECnodesConfig()
         self.number_of_RANs = len(self.mec_nodes[0].latency_array)
+        self.step = 0
 
-        #generate inputs: iniital load, application and starting position (MEC and cell), trajectory
+        # generate inputs: iniital load, application and starting position (MEC and cell), trajectory
 
-        #generate initial load
+        # generate initial load
         self._generateInitialLoadForTopology()
 
-        #generate trajectory
+        # generate trajectory
         self.mobilityStateMachine = self._generateStateMachine()
         self.trajectory = self._generateTrajectory(5, 25)
 
-        #generateApp
+        # generateApp
         self.mecApp = self._generateMECApp()
         self.mecApp.current_MEC = self._selectStartingNode()
-        if self.mecApp.current_MEC is None:
-            print("Cannot find any initial cluster for app")
-            #todo and what next?
+        while self.mecApp.current_MEC is None:
+            print("Cannot find any initial cluster for app. Generating new one")
+            self.mecApp = self._generateMECApp()
+            self.mecApp.current_MEC = self._selectStartingNode()
 
         # Define the action and observation space
         self.action_space = gym.spaces.Discrete(len(self.mec_nodes))
@@ -52,14 +56,13 @@ class MECEnv(gym.Env):
         # MEC  : 1) CPU Capacity 2) CPU Utilization [%] 3) Memory Capacity 4) Memory Utilization [%] 5) Unit Cost
         space_MEC = gym.spaces.Box(shape=low_bound.shape, dtype=np.int32, low=low_bound, high=high_bound)
         # APP  : 1) Required mvCPU 2) required Memory 3) Required Latency 4) Current MEC 5) Current RAN
-        space_APP = gym.spaces.Tuple((gym.spaces.Box(3, shape=low_bound.shape, dtype=np.int32, low=low_bound, high=high_bound),
-                                      gym.spaces.Discrete(3, start=1),
+        space_APP = gym.spaces.Tuple((gym.spaces.Discrete(6, start=1),
+                                      gym.spaces.Discrete(6, start=1),
                                       gym.spaces.Discrete(3, start=1),
                                       gym.spaces.Discrete(len(self.mec_nodes), start=1),
                                       gym.spaces.Discrete(self.number_of_RANs, start=1),))
 
-        obs_box = gym.spaces.Tuple((space_MEC, space_APP))
-
+        self.observation_space = gym.spaces.Tuple((space_MEC, space_APP))
         self.state = self._get_state()
 
     def _get_state(self):
@@ -74,12 +77,11 @@ class MECEnv(gym.Env):
             space_MEC[i, 4] = self.determineStateofCost(mec_node.placement_cost)
 
         # APP  : 1) Required mvCPU 2) required Memory 3) Required Latency 4) Current MEC 5) Current RAN
-        space_APP = (self.determineStateofAppReq(self.mecApp.app_req_cpu),
-                     self.determineStateofAppReq(self.mecApp.app_req_memory),
-                     self.determineStateofAppLatReq(self.mecApp.app_req_latency),
-                     self.mecApp.current_MEC.id,
-                     self.mecApp.user_position)
-
+        space_APP = gym.spaces.Tuple((self.determineStateofAppReq(self.mecApp.app_req_cpu),
+                                      self.determineStateofAppReq(self.mecApp.app_req_memory),
+                                      self.determineStateofAppLatReq(self.mecApp.app_req_latency),
+                                      self.mecApp.current_MEC.id,
+                                      self.mecApp.user_position))
 
         state = gym.spaces.Tuple((space_MEC, space_APP))
         return state
@@ -101,12 +103,18 @@ class MECEnv(gym.Env):
             return 3
 
     def determineStateofAppReq(self, reqValue):
-        if reqValue == 300:
-            return 1
-        if reqValue == 400:
-            return 2
         if reqValue == 500:
+            return 1
+        if reqValue == 600:
+            return 2
+        if reqValue == 700:
             return 3
+        if reqValue == 800:
+            return 4
+        if reqValue == 900:
+            return 5
+        if reqValue == 1000:
+            return 6
 
     def determineStateofAppLatReq(self, latValue):
         if latValue == 10:
@@ -118,37 +126,35 @@ class MECEnv(gym.Env):
 
     def _generateTrajectory(self, min_length, max_length):
 
-            #generate initial UE position
-            start_state = random.randint(1,self.number_of_RANs)
-            trajectory = [start_state]
-            current_state = start_state
+        # generate initial UE position
+        start_state = random.randint(1, self.number_of_RANs)
+        trajectory = [start_state]
+        current_state = start_state
 
-            #generate length of trajectory
-            trajectory_length = random.randint(min_length, max_length)
+        # generate length of trajectory
+        trajectory_length = random.randint(min_length, max_length)
 
-            for i in range(trajectory_length):
-                next_states = self.mobilityStateMachine[current_state]
-                if not next_states:
-                    break
-                current_state = random.choice(next_states)
-                trajectory.append(current_state)
+        for i in range(trajectory_length):
+            next_states = self.mobilityStateMachine[current_state]
+            if not next_states:
+                break
+            current_state = random.choice(next_states)
+            trajectory.append(current_state)
 
-            return trajectory
-
+        return trajectory
 
     def _generateMECApp(self):
 
-        # Generate a random integer between 500 and 1000 (inclusive)
-        random_req_cpu = random.randint(500, 1000)
-        random_req_mem = random.randint(500, 1000)
+        # Generate a value for required resources among given:
+        resources_req = [500, 600, 700, 800, 900, 1000]
+        random_req_cpu = random.choice(resources_req)
+        random_req_mem = random.choice(resources_req)
         # Define a list of three latency: 10, 15, 25
         allowed_latencies = [10, 15, 25]
         # Randomly select one number from the list
         random_latency = random.choice(allowed_latencies)
 
         return MecApp(random_req_cpu, random_req_mem, random_latency, 0.8, self.trajectory[0])
-
-
 
     def _printAllMECs(self):
         print(self.mec_nodes)
@@ -183,8 +189,6 @@ class MECEnv(gym.Env):
         print(mec_nodes)
         return mec_nodes
 
-
-
     def _generateInitialLoadForTopology(self):
 
         loads = [30, 40, 50, 60, 70, 80, 90]
@@ -198,34 +202,45 @@ class MECEnv(gym.Env):
             mec.memory_utilization = random.randint(low_boundries, high_boundries)
             mec.memory_available = mec.memory_capacity - mec.memory_capacity * mec.memory_utilization / 100
 
-
-
     def _selectStartingNode(self):
         cnt = 0
         while True:
             randomMecId = random.randint(1, len(self.mec_nodes))
-            if self.mecApp.LatencyOK(self._getMecNodeByID(randomMecId)) and self.mecApp.ResourcesOK(self._getMecNodeByID(randomMecId)):
+            if self.mecApp.LatencyOK(self._getMecNodeByID(randomMecId)) and self.mecApp.ResourcesOK(
+                    self._getMecNodeByID(randomMecId)):
                 return self._getMecNodeByID(randomMecId)
             if cnt > 1000:
                 return None
             cnt += 1
 
+    def reset(self):
 
-    def reset(self, mecApp):
+        # todo: check if seed change is needed here
+        super().reset()
 
-            self.step = 0
-            self._generateInitialLoadForTopology()
+        self.step = 0
 
-                        # app specific
-            #todo: if the paths will be defined, so the starting cell will be known as well
-            self.mecApp = MecApp(mecApp.app_req_cpu, mecApp.app_req_memory, mecApp.app_req_latency, mecApp.tau, self.number_of_RANs)
+        # generate inputs: inital load, application and starting position (MEC and cell), trajectory
+
+        # generate initial load
+        self._generateInitialLoadForTopology()
+
+        # generate trajectory
+        self.trajectory = self._generateTrajectory(5, 25)
+
+        # generateApp
+        self.mecApp = self._generateMECApp()
+        self.mecApp.current_MEC = self._selectStartingNode()
+        while self.mecApp.current_MEC is None:
+            print("Cannot find any initial cluster for app. Generating new one")
+            self.mecApp = self._generateMECApp()
             self.mecApp.current_MEC = self._selectStartingNode()
-            if self.mecApp.current_MEC is None:
-                print("Cannot find any initial cluster for app")
 
-            return self._get_state()
+        self.state = self._get_state()
 
-    def step(self, action, paramWeights):
+        return self.state
+
+    def step(self, action):
         '''
         # We are assuming that the constraints are already checked by agent, and actions are masked -> here we need to move application only and update the state
         :param action:  ID of mec done where the application is relocated
@@ -233,31 +248,27 @@ class MECEnv(gym.Env):
         :return:
         '''
 
-
         # Check that the action is within the action space
         assert self.action_space.contains(action)
 
         check_if_relocated = self._relocateApplication(action)
 
-        # # Update the state of the environment
-        # state = self._get_state()
+        # Update the state of the environment
+        self.state = self._get_state()
 
         # Calculate the reward based on the new state
         # reward = self._calculate_reward(state)
-        reward = self.calculateReward(paramWeights, check_if_relocated)
+        reward = self.calculateReward(check_if_relocated)
 
         # Determine whether the episode is finished
         done = False
         self.step += self.step
 
-        if self.step > self.maxNumberOfSteps:
+        if self.step == len(self.trajectory):
             done = True
 
-        state = self._get_state()
-
         # Return the new state, the reward, and whether the episode is finished
-        return state, reward, done, {}
-
+        return self.state, reward, done, {}
 
     def _relocateApplication(self, action):
         '''
@@ -266,16 +277,16 @@ class MECEnv(gym.Env):
         :param action: currently action means the id of cluster where to relocate
         :return: true if app has been moved, false if app stayed at the same cluster
         '''
-        #check first if selected MEC is a current MEC
+        # check first if selected MEC is a current MEC
         currentNode = self._getMecNodeByID(self.mecApp.current_MEC.id)
         targetNode = self._getMecNodeByID(action.targetNode)
 
         if currentNode == targetNode:
-            return False
             print("No relocation, since selected cluster is the same as a current")
+            return False
 
-        #OLD NODE
-        #take care of CPU
+        # OLD NODE
+        # take care of CPU
         currentNode.cpu_available -= self.mecApp.app_req_cpu
         currentNode.cpu_utilization /= currentNode.cpu_capacity * 100
 
@@ -283,7 +294,7 @@ class MECEnv(gym.Env):
         currentNode.memory_available -= self.mecApp.app_req_memory
         currentNode.memory_utilization /= currentNode.memory_capacity * 100
 
-        #NEW NODE
+        # NEW NODE
         # take care of CPU
         targetNode.cpu_available -= self.mecApp.app_req_cpu
         targetNode.cpu_utilization /= targetNode.cpu_capacity * 100
@@ -292,16 +303,15 @@ class MECEnv(gym.Env):
         targetNode.memory_available -= self.mecApp.app_req_memory
         targetNode.memory_utilization /= targetNode.memory_capacity * 100
 
-        #Application udpate
+        # Application udpate
         self.mecApp.current_MEC = targetNode
         self.mecApp.user_position = action.uePosition
 
         return True
 
-    def calculateReward(self, paramWeights, check_if_relocated):
+    def calculateReward(self, check_if_relocated):
         '''
         func to calculate reward after each step
-        :param paramWeights: this is struct provided by agent with weights in order to prioritize some of reward function parts
         :param check_if_relocated: this params refers to
         :return:
         '''
@@ -319,21 +329,23 @@ class MECEnv(gym.Env):
 
         # Create a numpy array of numbers
         for mec_node in self.mec_nodes:
-            np.cpu_util.append(mec_node.cpu_utilization / 100) #divided by 100, as utilization is as percentage, so we are adding in a range [0-1] e.g array = [0.1, 0.4, 0.7, 0.5, ...]
-            np.mem_util.append(mec_node.memory_utilization / 100)  # divided by 100, as utilization is as percentage, so we are adding in a range [0-1]
+            np.cpu_util.append(
+                mec_node.cpu_utilization / 100)  # divided by 100, as utilization is as percentage, so we are adding in a range [0-1] e.g array = [0.1, 0.4, 0.7, 0.5, ...]
+            np.mem_util.append(
+                mec_node.memory_utilization / 100)  # divided by 100, as utilization is as percentage, so we are adding in a range [0-1]
 
         # Calculate the standard deviation -> for range [0-1] the max std is 0.5 (e.g., mec1 - 0, mec2 - 1 -> mean: 0.5, deviation max: 0.5), the min is 0
         std_dev_cpu = np.std(np.cpu_util)
         std_dev_mem = np.std(np.mem_util)
-        LB_reward = 1 - (std_dev_cpu + std_dev_mem) # if the std is huge, e.g. 0.4 (LB is bad), the reward would be: 1 - (0.4+0.4) = 0.2
+        LB_reward = 1 - (
+                    std_dev_cpu + std_dev_mem)  # if the std is huge, e.g. 0.4 (LB is bad), the reward would be: 1 - (0.4+0.4) = 0.2
 
         ###################### Cost of placement REWARD #############################
         placement_cost_reward = self.mecApp.current_MEC.placement_cost
 
         ###################### TOTAL REWARD #####################################
-        reward = paramWeights.minNumberOfRelocation *  min_Number_of_relocation_reward +  paramWeights.minNumberOfRelocation * LB_reward + paramWeights.minNumberOfRelocation * placement_cost_reward
+        reward = paramWeights.minNumberOfRelocation * min_Number_of_relocation_reward + paramWeights.minNumberOfRelocation * LB_reward + paramWeights.minNumberOfRelocation * placement_cost_reward
         return reward
-
 
     def _generateStateMachine(self):
 
