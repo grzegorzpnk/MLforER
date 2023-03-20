@@ -6,8 +6,6 @@ import numpy as np
 import gym
 from gym.spaces import Discrete
 
-from mec_node import MecNode
-from app import MecApp
 
 
 class MECEnv(gym.Env):
@@ -251,19 +249,19 @@ class MECEnv(gym.Env):
         # Check that the action is within the action space
         assert self.action_space.contains(action)
 
-        check_if_relocated = self._relocateApplication(action)
+        self.step += self.step
+
+        relocation_done = self._relocateApplication(action)
 
         # Update the state of the environment
         self.state = self._get_state()
 
         # Calculate the reward based on the new state
         # reward = self._calculate_reward(state)
-        reward = self.calculateReward(check_if_relocated)
+        reward = self.calculateReward(relocation_done)
 
         # Determine whether the episode is finished
         done = False
-        self.step += self.step
-
         if self.step == len(self.trajectory):
             done = True
 
@@ -309,42 +307,32 @@ class MECEnv(gym.Env):
 
         return True
 
-    def calculateReward(self, check_if_relocated):
+    def calculateReward(self, is_relocation_done):
         '''
         func to calculate reward after each step
-        :param check_if_relocated: this params refers to
+        :param is_relocation_done: this params refers to
         :return:
         '''
 
-        if check_if_relocated:
+
+        if not is_relocation_done:
             reward = 1
-            return reward
         else:
             min_Number_of_relocation_reward = 0
 
-        ######################### LOAD BALANCING REWARD ###############################
-        # Initialize an empty arrays
-        np.cpu_util = []
-        np.mem_util = []
+        # ######################### LOAD BALANCING REWARD ###############################
+        # # Initialize an empty arrays
+        #
+        #
+        # ###################### Cost of placement REWARD #############################
+        # placement_cost_reward = self.mecApp.current_MEC.placement_cost
+        #
+        # ###################### TOTAL REWARD #####################################
+        # reward = paramWeights.minNumberOfRelocation * min_Number_of_relocation_reward + paramWeights.minNumberOfRelocation * LB_reward + paramWeights.minNumberOfRelocation * placement_cost_reward
+        #
+        # if self.step() == len(self.trajectory):
+        #     reward += reward *
 
-        # Create a numpy array of numbers
-        for mec_node in self.mec_nodes:
-            np.cpu_util.append(
-                mec_node.cpu_utilization / 100)  # divided by 100, as utilization is as percentage, so we are adding in a range [0-1] e.g array = [0.1, 0.4, 0.7, 0.5, ...]
-            np.mem_util.append(
-                mec_node.memory_utilization / 100)  # divided by 100, as utilization is as percentage, so we are adding in a range [0-1]
-
-        # Calculate the standard deviation -> for range [0-1] the max std is 0.5 (e.g., mec1 - 0, mec2 - 1 -> mean: 0.5, deviation max: 0.5), the min is 0
-        std_dev_cpu = np.std(np.cpu_util)
-        std_dev_mem = np.std(np.mem_util)
-        LB_reward = 1 - (
-                    std_dev_cpu + std_dev_mem)  # if the std is huge, e.g. 0.4 (LB is bad), the reward would be: 1 - (0.4+0.4) = 0.2
-
-        ###################### Cost of placement REWARD #############################
-        placement_cost_reward = self.mecApp.current_MEC.placement_cost
-
-        ###################### TOTAL REWARD #####################################
-        reward = paramWeights.minNumberOfRelocation * min_Number_of_relocation_reward + paramWeights.minNumberOfRelocation * LB_reward + paramWeights.minNumberOfRelocation * placement_cost_reward
         return reward
 
     def _generateStateMachine(self):
@@ -395,3 +383,53 @@ class MECEnv(gym.Env):
         }
 
         return mobilityStateMachine
+
+class MecNode:
+    #utilization -> precentage
+    def __init__(self, id, cpu_capacity, memory_capacity, cpu_utilization, memory_utilization, latency_array,
+                 placement_cost):
+        self.id = id
+        self.cpu_capacity = cpu_capacity
+        self.cpu_utilization = cpu_utilization
+        self.cpu_available = cpu_capacity - cpu_utilization / 100 * cpu_capacity
+        self.memory_capacity = memory_capacity
+        self.memory_utilization = memory_utilization
+        self.memory_available = memory_capacity - memory_utilization / 100 * memory_capacity
+        self.latency_array = latency_array
+        self.placement_cost = placement_cost
+
+class MecApp:
+    def __init__(self, app_req_cpu, app_req_memory, app_req_latency, tau, user_position):
+        self.app_req_cpu = app_req_cpu
+        self.app_req_memory = app_req_memory
+        self.app_req_latency = app_req_latency
+        self.tau = tau
+        self.user_position = user_position
+        self.current_MEC = None
+
+    def LatencyOK(self, mec):
+        '''
+        This is supportive funtion to check latency conditions, used only for initial (for init state) placement of our main app.
+        This func is not used to check conditions during the relocation, since it;s responisibility of agent
+        :param mec:
+        :return:
+        '''
+        if mec.latency_array[self.user_position] < self.app_req_latency:
+            return True
+        else:
+            return False
+
+    def ResourcesOK(self, mec):
+        '''
+        This is supportive funtion to check resources conditions, used only for initial (for init state) placement of our main app.
+        This func is not used to check conditions during the relocation, since it;s responisibility of agent
+        :param mec:
+        :return:
+        '''
+        if mec.memory_available < self.app_req_memory < self.tau * mec.memory_capacity and mec.cpu_available < self.app_req_cpu < self.tau * mec.cpu_capacity:
+            return True
+        else:
+            return False
+
+
+
