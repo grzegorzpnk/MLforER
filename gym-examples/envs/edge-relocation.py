@@ -5,7 +5,7 @@ import numpy as np
 import gym
 
 
-class MECEnv(gym.Env):
+class EdgeRelEnv(gym.Env):
 
     def __init__(self):
 
