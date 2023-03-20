@@ -1,11 +1,8 @@
 import random
-from abc import ABC
 
 import requests
 import numpy as np
 import gym
-from gym.spaces import Discrete
-
 
 
 class MECEnv(gym.Env):
