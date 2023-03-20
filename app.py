@@ -1,19 +1,13 @@
-import random
 from mec_node import MecNode
 import app
 
-
-def selectStartingUEPosition(n_rans):
-    return random.randint(1, n_rans)
-
-
 class MecApp:
-    def __init__(self, app_req_cpu, app_req_memory, app_req_latency, tau, n_rans):
+    def __init__(self, app_req_cpu, app_req_memory, app_req_latency, tau, user_position):
         self.app_req_cpu = app_req_cpu
         self.app_req_memory = app_req_memory
         self.app_req_latency = app_req_latency
         self.tau = tau
-        self.user_position = selectStartingUEPosition(n_rans)
+        self.user_position = user_position
         self.current_MEC = None
 
     def LatencyOK(self, mec):

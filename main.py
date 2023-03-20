@@ -11,22 +11,28 @@ from app import MecApp
 
 class MECEnv(gym.Env):
 
-    def __init__(self, mecApp):
+    def __init__(self):
 
-        # Initialize the MEC nodes part of a state
         self.mec_nodes = self._fetchMECnodesConfig()
-
-        # ran specific
         self.number_of_RANs = len(self.mec_nodes[0].latency_array)
 
-        #todo: set of predefined apps needs to be defined here
-        self.mecApp = MecApp(mecApp.app_req_cpu, mecApp.app_req_memory, mecApp.app_req_latency, 0.8, self.number_of_RANs)
+        #generate inputs: iniital load, application and starting position (MEC and cell), trajectory
+
+        #generate initial load
+        self._generateInitialLoadForTopology()
+
+        #generate trajectory
+        self.mobilityStateMachine = self._generateStateMachine()
+        self.trajectory = self._generateTrajectory(5, 25)
+
+        #generateApp
+        self.mecApp = self._generateMECApp()
         self.mecApp.current_MEC = self._selectStartingNode()
         if self.mecApp.current_MEC is None:
             print("Cannot find any initial cluster for app")
+            #todo and what next?
 
         # Define the action and observation space
-
         self.action_space = gym.spaces.Discrete(len(self.mec_nodes))
 
         low_bound = np.zeros((len(self.mec_nodes), 5))  # initialize a 3x5 array filled with zeros
@@ -46,7 +52,7 @@ class MECEnv(gym.Env):
         # MEC  : 1) CPU Capacity 2) CPU Utilization [%] 3) Memory Capacity 4) Memory Utilization [%] 5) Unit Cost
         space_MEC = gym.spaces.Box(shape=low_bound.shape, dtype=np.int32, low=low_bound, high=high_bound)
         # APP  : 1) Required mvCPU 2) required Memory 3) Required Latency 4) Current MEC 5) Current RAN
-        space_APP = gym.spaces.Tuple((gym.spaces.Discrete(3, start=1),
+        space_APP = gym.spaces.Tuple((gym.spaces.Box(3, shape=low_bound.shape, dtype=np.int32, low=low_bound, high=high_bound),
                                       gym.spaces.Discrete(3, start=1),
                                       gym.spaces.Discrete(3, start=1),
                                       gym.spaces.Discrete(len(self.mec_nodes), start=1),
@@ -54,7 +60,7 @@ class MECEnv(gym.Env):
 
         obs_box = gym.spaces.Tuple((space_MEC, space_APP))
 
-        self.state = None
+        self.state = self._get_state()
 
     def _get_state(self):
         space_MEC = np.zeros((len(self.mec_nodes), 5))
@@ -109,6 +115,38 @@ class MECEnv(gym.Env):
             return 2
         if latValue == 25:
             return 3
+
+    def _generateTrajectory(self, min_length, max_length):
+
+            #generate initial UE position
+            start_state = random.randint(1,self.number_of_RANs)
+            trajectory = [start_state]
+            current_state = start_state
+
+            #generate length of trajectory
+            trajectory_length = random.randint(min_length, max_length)
+
+            for i in range(trajectory_length):
+                next_states = self.mobilityStateMachine[current_state]
+                if not next_states:
+                    break
+                current_state = random.choice(next_states)
+                trajectory.append(current_state)
+
+            return trajectory
+
+
+    def _generateMECApp(self):
+
+        # Generate a random integer between 500 and 1000 (inclusive)
+        random_req_cpu = random.randint(500, 1000)
+        random_req_mem = random.randint(500, 1000)
+        # Define a list of three latency: 10, 15, 25
+        allowed_latencies = [10, 15, 25]
+        # Randomly select one number from the list
+        random_latency = random.choice(allowed_latencies)
+
+        return MecApp(random_req_cpu, random_req_mem, random_latency, 0.8, self.trajectory[0])
 
 
 
@@ -268,9 +306,9 @@ class MECEnv(gym.Env):
         :return:
         '''
 
-        ###################### MIN number of relocation #############################
         if check_if_relocated:
-            min_Number_of_relocation_reward = 1
+            reward = 1
+            return reward
         else:
             min_Number_of_relocation_reward = 0
 
@@ -297,35 +335,51 @@ class MECEnv(gym.Env):
         return reward
 
 
-    def test(self):
-        Trajectory1 = [5, 7, 15, 25, 27, 29, 18, 10, 8, 1, 3, 12, 22, 25, 15, 22, 24, 33]
-        Trajectory2 = [8, 1, 3, 12, 22, 25, 27, 29, 18, 13, 26, 32, 35, 37, 39, 31, 29, 25, 15, 22, 24, 33]
-        Trajectory3 = [4, 14, 16, 23, 26, 32, 35, 42, 41, 28, 19, 17, 20, 6, 1]
-        Trajectory4 = [2, 14, 16, 23, 32, 35, 42, 41, 28, 19, 21, 20, 17, 9, 4, 7, 12, 22, 24, 33, 39]
-        Trajectory5 = [6, 1, 3, 12, 22, 25, 27, 31, 29, 25, 18, 10, 8, 1, 3, 12, 22, 25, 15, 22, 24, 33]
-        Trajectory6 = [2, 14, 16, 23, 26, 32, 35, 37, 42, 41, 28, 19, 17, 9, 4, 7, 12, 22, 25, 27, 31, 29, 25, 18, 13]
-        Trajectory7 = [9, 4, 14, 16, 23, 32, 35, 37, 42, 41, 28, 19, 21, 17, 20, 6, 2, 11, 13, 16, 23, 32, 34, 36, 31]
-        Trajectory8 = [5, 7, 15, 22, 25, 27, 31, 29, 25, 27, 12, 22, 25, 27, 31, 29, 18, 13, 26, 23, 16, 23, 32, 34, 36, 31, 29]
-        Trajectory9 = [4, 7, 12, 22, 25, 15, 22, 25, 27, 29, 18, 21, 20, 6, 9, 17, 20, 21, 19, 28, 30, 19, 21, 17]
-        Trajectory10 = [13, 23, 26, 32, 35, 42, 41, 28, 30, 19, 21, 20, 17, 9, 4, 7, 12, 22, 25, 27, 29, 25, 18, 13, 26, 23, 16, 14, 2, 11]
+    def _generateStateMachine(self):
 
-        trajectories = [Trajectory1, Trajectory2, Trajectory3, Trajectory4, Trajectory5, Trajectory6, Trajectory7, Trajectory8, Trajectory9, Trajectory10]
+        mobilityStateMachine = {
+            "1": [3],
+            "5": [2, 7],
+            "8": [1],
+            "2": [11, 14],
+            "4": [11, 14],
+            "6": [1, 2],
+            "9": [4, 7],
+            "3": [12],
+            "7": [12, 15],
+            "10": [8],
+            "11": [13, 16],
+            "14": [13, 16],
+            "17": [6, 9],
+            "20": [6, 9],
+            "12": [22],
+            "15": [22, 25],
+            "18": [10],
+            "13": [23, 26],
+            "16": [23, 26],
+            "19": [17, 20],
+            "21": [17, 20],
+            "22": [24],
+            "25": [15, 18, 24, 27],
+            "29": [18],
+            "23": [32, 35],
+            "26": [32, 35],
+            "28": [19, 21],
+            "30": [19, 21],
+            "24": [33],
+            "27": [25, 29],
+            "31": [29],
+            "32": [34],
+            "35": [37],
+            "38": [28, 30],
+            "41": [28, 30],
+            "33": [39],
+            "36": [27, 31],
+            "39": [31],
+            "34": [36, 40],
+            "37": [39, 42],
+            "40": [38, 41],
+            "42": [38, 41],
+        }
 
-        #      MecApp(mecApp.app_req_cpu, mecApp.app_req_memory, mecApp.app_req_latency, 0.8, self.number_of_RANs)
-        app1 = MecApp(500, 500, 15, 0.8, self.number_of_RANs)
-
-
-    # Episodes:
-    # For each initial load
-    # FOR each trajectory
-    # For each type of application [ fixed latency, fixed resources ]
-
-#         for initial_load in range (1,10):
-#             self._generateInitialLoadForTopology()
-#             for trajectory in trajectories:
-#                 for app in self.apps:
-#
-#
-#
-# test()
-#
+        return mobilityStateMachine
