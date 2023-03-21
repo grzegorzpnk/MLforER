@@ -12,10 +12,10 @@ class EdgeRelEnv(gym.Env):
     def render(self) -> Optional[Union[RenderFrame, List[RenderFrame]]]:
         pass
 
-    def __init__(self):
+    def __init__(self, endpoint):
 
         # read initial topology config from external simulator
-        self.mec_nodes = self._fetchMECnodesConfig()
+        self.mec_nodes = self._fetchMECnodesConfig(endpoint)
         self.number_of_RANs = len(self.mec_nodes[0].latency_array)
         self.step = 0
 
@@ -166,9 +166,9 @@ class EdgeRelEnv(gym.Env):
         # if the mec node with the given ID is not found, return None
         return None
 
-    def _fetchMECnodesConfig(self):
+    def _fetchMECnodesConfig(self, endpoint):
         mec_nodes = []
-        url = "http://127.0.0.1:8282/v1/topology/ml/InitialConfig"
+        url = 'http://' + endpoint + ':8282/v1/topology/ml/InitialConfig'
         response = requests.get(url)
 
         if response.status_code == 200:
