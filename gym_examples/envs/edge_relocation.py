@@ -29,51 +29,7 @@ class EdgeRelEnv(gym.Env):
         self._generateInitialLoadForTopology()
 
         # generate trajectory
-        #self.mobilityStateMachine = self._generateStateMachine()
-        self.mobilityStateMachine = {
-            "1": [3],
-            "5": [2, 7],
-            "8": [1],
-            "2": [11, 14],
-            "4": [11, 14],
-            "6": [1, 2],
-            "9": [4, 7],
-            "3": [12],
-            "7": [12, 15],
-            "10": [8],
-            "11": [13, 16],
-            "14": [13, 16],
-            "17": [6, 9],
-            "20": [6, 9],
-            "12": [22],
-            "15": [22, 25],
-            "18": [10],
-            "13": [23, 26],
-            "16": [23, 26],
-            "19": [17, 20],
-            "21": [17, 20],
-            "22": [24],
-            "25": [15, 18, 24, 27],
-            "29": [18],
-            "23": [32, 35],
-            "26": [32, 35],
-            "28": [19, 21],
-            "30": [19, 21],
-            "24": [33],
-            "27": [25, 29],
-            "31": [29],
-            "32": [34],
-            "35": [37],
-            "38": [28, 30],
-            "41": [28, 30],
-            "33": [39],
-            "36": [27, 31],
-            "39": [31],
-            "34": [36, 40],
-            "37": [39, 42],
-            "40": [38, 41],
-            "42": [38, 41],
-        }
+        self.mobilityStateMachine = self._generateStateMachine()
         self.trajectory = self._generateTrajectory(5, 25)
 
         # generateApp
@@ -181,9 +137,8 @@ class EdgeRelEnv(gym.Env):
 
         # generate length of trajectory
         trajectory_length = random.randint(min_length, max_length)
-        #todo: to be fixed
         for i in range(trajectory_length):
-            next_states = self.mobilityStateMachine.get(current_state, [])
+            next_states = self.mobilityStateMachine.get(str(current_state), [])
             if not next_states:
                 break
             current_state = random.choice(next_states)
@@ -214,28 +169,6 @@ class EdgeRelEnv(gym.Env):
         # if the mec node with the given ID is not found, return None
         return None
 
-    def _fetchMECnodesConfig(self, endpoint):
-        mec_nodes = []
-        url = 'http://' + endpoint + ':8282/v1/topology/ml/InitialConfig'
-        response = requests.get(url)
-
-        if response.status_code == 200:
-            json_data = response.json()
-            for item in json_data:
-                mec_node = MecNode(
-                    item['id'],
-                    item['cpu_capacity'],
-                    item['memory_capacity'],
-                    item['cpu_utilization'],
-                    item['memory_utilization'],
-                    item['latency_array'],
-                    item['placement_cost']
-                )
-                mec_nodes.append(mec_node)
-        else:
-            print('CANNOT fetch initial config from NMT. Connection response:', response.status_code)
-        print(mec_nodes)
-        return mec_nodes
 
     def _readMECnodesConfig(self, filename):
 
@@ -275,14 +208,15 @@ class EdgeRelEnv(gym.Env):
         cnt = 0
         while True:
             randomMecId = random.randint(1, len(self.mec_nodes))
-            if self.mecApp.LatencyOK(self._getMecNodeByID(randomMecId)) and self.mecApp.ResourcesOK(self._getMecNodeByID(randomMecId)):
-                self._getMecNodeByID(randomMecId).cpu_utilization += self.mecApp.app_req_cpu/self._getMecNodeByID(randomMecId).cpu_capacity
-                self._getMecNodeByID(randomMecId).cpu_available = self._getMecNodeByID(randomMecId).cpu_capacity - self._getMecNodeByID(randomMecId).cpu_capacity * self._getMecNodeByID(randomMecId).cpu_utilization
+            randomMecName = "mec" + str(randomMecId)
+            if self.mecApp.LatencyOK(self._getMecNodeByID(randomMecName)) and self.mecApp.ResourcesOK(self._getMecNodeByID(randomMecName)):
+                self._getMecNodeByID(randomMecName).cpu_utilization += self.mecApp.app_req_cpu/self._getMecNodeByID(randomMecName).cpu_capacity
+                self._getMecNodeByID(randomMecName).cpu_available = self._getMecNodeByID(randomMecName).cpu_capacity - self._getMecNodeByID(randomMecName).cpu_capacity * self._getMecNodeByID(randomMecName).cpu_utilization
 
-                self._getMecNodeByID(randomMecId).memory_utilization += self.mecApp.app_req_memory / self._getMecNodeByID(randomMecId).memory_capacity
-                self._getMecNodeByID(randomMecId).memory_available = self._getMecNodeByID(randomMecId).cpu_memory - self._getMecNodeByID(randomMecId).cpu_memory * self._getMecNodeByID(randomMecId).cpu_memory
+                self._getMecNodeByID(randomMecName).memory_utilization += self.mecApp.app_req_memory / self._getMecNodeByID(randomMecName).memory_capacity
+                self._getMecNodeByID(randomMecName).memory_available = self._getMecNodeByID(randomMecName).memory_capacity - self._getMecNodeByID(randomMecName).memory_capacity * self._getMecNodeByID(randomMecName).memory_utilization
 
-                return self._getMecNodeByID(randomMecId)
+                return self._getMecNodeByID(randomMecName)
             if cnt > 1000:
                 return None
             cnt += 1
@@ -479,7 +413,8 @@ class MecApp:
         :param mec:
         :return:
         '''
-        if mec.latency_array[self.user_position] < self.app_req_latency:
+        # -1 cause latency_array[0] refers to the cell 1 etc..
+        if mec.latency_array[self.user_position-1] < self.app_req_latency:
             return True
         else:
             return False
