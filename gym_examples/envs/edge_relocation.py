@@ -185,7 +185,7 @@ class EdgeRelEnv(gym.Env):
                 )
                 mec_nodes.append(mec_node)
         else:
-            print('Error:', response.status_code)
+            print('CANNOT fetch initial config from NMT. Connection response:', response.status_code)
         print(mec_nodes)
         return mec_nodes
 
