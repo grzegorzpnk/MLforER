@@ -1,6 +1,6 @@
 # MLforER
-This repo contains Rainforcement Learning training model for Edge Relocation
-Details about what Edge Relocation is can be found [here](https://ieeexplore.ieee.org/document/9779643) 
+This repo contains Rainforcement Learning env and other stuffs to train an ER model for.
+More Details about what Edge Relocation is can be found [here](https://ieeexplore.ieee.org/document/9779643) 
 
 
 ## Action Space Documentation
