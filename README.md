@@ -7,7 +7,6 @@ More Details about what Edge Relocation is can be found [here](https://ieeexplor
 
 The action space for the custom environment in AI gym is defined as follows:
 
-python
 
 `self.action_space = gym.spaces.Discrete(len(self.mec_nodes))` 
 
@@ -32,8 +31,8 @@ The first sub-space represents the current state of all MEC nodes in the network
 
 The second sub-space represents the current state of the MEC application requesting deployed at MEC infra. It is a `Tuple` space consisting of the following five discrete sub-spaces:
 
-1.  **Required mvCPU**: The required by app a milli-vCPU at MEC Node. This is a `Discrete` space with a valid values of 1, 2, 3, corresponding to a required mvCPU resources: 300, 400, 500 milli-vCPU, respectively.
-2.  **Required Memory**: The required by app a Megabytes RAM memory at MEC Node. This is a `Discrete` space with a valid values of 1, 2, 3, corresponding to a required  resources: 300, 400, 500 Megabytes RAM, respectively.
+1.  **Required mvCPU**: The required by app a milli-vCPU at MEC Node. This is a `Discrete` space with a valid values of 1, 2, 3, 4, 5, 6 corresponding to a required mvCPU resources:  500, 600, 700, 800, 900, 1000 milli-vCPU, respectively.
+2.  **Required Memory**: The required by app a Megabytes RAM memory at MEC Node. This is a `Discrete` space with a valid values of 1, 2, 3, 4, 5, 6 corresponding to a required  resources: 500, 600, 700, 800, 900, 1000 Megabytes RAM, respectively.
 3.  **Required Latency**: The required latency of the MEC application in milliseconds to be guaranteed by selected MEC Node. This is a `Discrete` space with a valid value 1,2,3 , corresponding to required latencies of 10, 15, and 25 milliseconds, respectively.
 4.  **Current MEC**: The index of the current MEC node where the MEC application is deployed. This is a `Discrete` integer space with a valid range of 1 to the number of MEC nodes in the topology.
 5.  **Current RAN**: The index of the current cell - RAN (Radio Access Network) that the user of considered MEC application is located. This is a `Discrete` integer space with a valid range of 1 to the total number of RANs in the network.
