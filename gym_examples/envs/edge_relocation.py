@@ -1,11 +1,16 @@
 import random
+from typing import Optional, Union, List
 
 import requests
 import numpy as np
 import gym
+from gym.core import RenderFrame
 
 
 class EdgeRelEnv(gym.Env):
+
+    def render(self) -> Optional[Union[RenderFrame, List[RenderFrame]]]:
+        pass
 
     def __init__(self):
 
@@ -381,8 +386,9 @@ class EdgeRelEnv(gym.Env):
 
         return mobilityStateMachine
 
+
 class MecNode:
-    #utilization -> precentage
+    # utilization -> percentage
     def __init__(self, id, cpu_capacity, memory_capacity, cpu_utilization, memory_utilization, latency_array,
                  placement_cost):
         self.id = id
@@ -394,6 +400,7 @@ class MecNode:
         self.memory_available = memory_capacity - memory_utilization / 100 * memory_capacity
         self.latency_array = latency_array
         self.placement_cost = placement_cost
+
 
 class MecApp:
     def __init__(self, app_req_cpu, app_req_memory, app_req_latency, tau, user_position):
