@@ -41,6 +41,7 @@ class EdgeRelEnv(gym.Env):
             self.mecApp.current_MEC = self._selectStartingNode()
 
         # Define the action and observation space
+        # todo: not every mec is available ( e.g. 2 do not exist)
         self.action_space = gym.spaces.Discrete(len(self.mec_nodes), start=1)
 
         low_bound = np.zeros((len(self.mec_nodes), 5))  # initialize a 3x5 array filled with zeros
@@ -59,18 +60,24 @@ class EdgeRelEnv(gym.Env):
 
         # MEC  : 1) CPU Capacity 2) CPU Utilization [%] 3) Memory Capacity 4) Memory Utilization [%] 5) Unit Cost
         space_MEC = gym.spaces.Box(shape=low_bound.shape, dtype=np.int32, low=low_bound, high=high_bound)
-        # APP  : 1) Required mvCPU 2) required Memory 3) Required Latency 4) Current MEC 5) Current RAN
-        space_APP = gym.spaces.Tuple((gym.spaces.Discrete(6, start=1),
-                                      gym.spaces.Discrete(6, start=1),
-                                      gym.spaces.Discrete(3, start=1),
-                                      gym.spaces.Discrete(len(self.mec_nodes), start=1),
-                                      gym.spaces.Discrete(self.number_of_RANs, start=1),))
 
-        self.observation_space = gym.spaces.Tuple((space_MEC, space_APP))
+        # APP  : 1) Required mvCPU 2) required Memory 3) Required Latency 4) Current MEC 5) Current RAN
+        space_App = gym.spaces.MultiDiscrete(
+            [(1, 6), (1, 6), (1, 3), (1, len(self.mec_nodes)), (1, self.number_of_RANs)])
+        #
+        # space_APP = gym.spaces.Tuple((gym.spaces.Discrete(6, start=1),
+        #                               gym.spaces.Discrete(6, start=1),
+        #                               gym.spaces.Discrete(3, start=1),
+        #                               gym.spaces.Discrete(len(self.mec_nodes), start=1),
+        #                               gym.spaces.Discrete(self.number_of_RANs, start=1)),)
+
+        self.observation_space = gym.spaces.Tuple((space_MEC, space_App))
         self.state = self._get_state()
 
     def _get_state(self):
+
         space_MEC = np.zeros((len(self.mec_nodes), 5))
+        # space_MEC = gym.spaces.Box((len(self.mec_nodes), 5), low=low_bound, high=high_bound)
 
         # MEC  : 0) CPU Capacity 1) CPU Utilization [%] 2) Memory Capacity 3) Memory Utilization [%] 4) Unit Cost
         for i, mec_node in enumerate(self.mec_nodes):
@@ -81,13 +88,13 @@ class EdgeRelEnv(gym.Env):
             space_MEC[i, 4] = self.determineStateofCost(mec_node.placement_cost)
 
         # APP  : 1) Required mvCPU 2) required Memory 3) Required Latency 4) Current MEC 5) Current RAN
-        space_APP = gym.spaces.Tuple((self.determineStateofAppReq(self.mecApp.app_req_cpu),
-                                      self.determineStateofAppReq(self.mecApp.app_req_memory),
-                                      self.determineStateofAppLatReq(self.mecApp.app_req_latency),
-                                      self.mecApp.current_MEC.id,
-                                      self.mecApp.user_position))
+        space_App = gym.spaces.MultiDiscrete([self.determineStateofAppReq(self.mecApp.app_req_cpu),
+                                              self.determineStateofAppReq(self.mecApp.app_req_memory),
+                                              self.determineStateofAppLatReq(self.mecApp.app_req_latency),
+                                              self.determineMecID(self.mecApp.current_MEC.id),
+                                              self.mecApp.user_position])
 
-        state = gym.spaces.Tuple((space_MEC, space_APP))
+        state = gym.spaces.Tuple((space_MEC, space_App))
         return state
 
     def determineStateOfCapacity(self, capacityValue):
@@ -101,7 +108,7 @@ class EdgeRelEnv(gym.Env):
     def determineStateofCost(self, placement_cost):
         if placement_cost == 0.33333:
             return 1
-        if placement_cost == 0.6667:
+        if placement_cost == 0.66667:
             return 2
         if placement_cost == 1:
             return 3
@@ -127,6 +134,9 @@ class EdgeRelEnv(gym.Env):
             return 2
         if latValue == 25:
             return 3
+
+    def determineMecID(self, mecName):
+        return int(mecName[3:])
 
     def _generateTrajectory(self, min_length, max_length):
 
@@ -169,7 +179,6 @@ class EdgeRelEnv(gym.Env):
         # if the mec node with the given ID is not found, return None
         return None
 
-
     def _readMECnodesConfig(self, filename):
 
         mec_nodes = []
@@ -194,9 +203,9 @@ class EdgeRelEnv(gym.Env):
     def _generateInitialLoadForTopology(self):
 
         loads = [30, 40, 50, 60, 70, 80]
-        middle_of_range = random.choice(loads) # 70%
-        low_boundries = middle_of_range - 10 #60
-        high_boundries = middle_of_range + 10 #80
+        middle_of_range = random.choice(loads)  # 70%
+        low_boundries = middle_of_range - 10  # 60
+        high_boundries = middle_of_range + 10  # 80
 
         for mec in self.mec_nodes:
             mec.cpu_utilization = random.randint(low_boundries, high_boundries)
@@ -209,7 +218,7 @@ class EdgeRelEnv(gym.Env):
         while True:
             randomMec = random.choice(self.mec_nodes)
             if self.mecApp.LatencyOK(randomMec) and self.mecApp.ResourcesOK(randomMec):
-                randomMec.cpu_utilization += self.mecApp.app_req_cpu/randomMec.cpu_capacity
+                randomMec.cpu_utilization += self.mecApp.app_req_cpu / randomMec.cpu_capacity
                 randomMec.cpu_available = randomMec.cpu_capacity - randomMec.cpu_capacity * randomMec.cpu_utilization
 
                 randomMec.memory_utilization += self.mecApp.app_req_memory / randomMec.memory_capacity
@@ -316,7 +325,6 @@ class EdgeRelEnv(gym.Env):
 
         return True
 
-
     def calculateReward(self, is_relocation_done):
         '''
         func to calculate reward after each step
@@ -414,7 +422,7 @@ class MecApp:
         :return:
         '''
         # -1 cause latency_array[0] refers to the cell 1 etc..
-        if mec.latency_array[self.user_position-1] < self.app_req_latency:
+        if mec.latency_array[self.user_position - 1] < self.app_req_latency:
             return True
         else:
             return False
@@ -431,7 +439,7 @@ class MecApp:
             return False
         elif mec.memory_available < self.app_req_memory:
             return False
-        elif mec.cpu_utilization <= self.tau*100 and mec.memory_utilization <= self.tau*100:
+        elif mec.cpu_utilization <= self.tau * 100 and mec.memory_utilization <= self.tau * 100:
             return True
         else:
             return False
@@ -444,7 +452,6 @@ class MecApp:
         # else:
         #     return False
 
-
         # if mec.memory_available < self.app_req_memory < self.tau * mec.memory_capacity and mec.cpu_available < self.app_req_cpu < self.tau * mec.cpu_capacity:
         #     return True
         # else:
@@ -452,5 +459,3 @@ class MecApp:
 
 
 env = EdgeRelEnv("topoconfig.json")
-print(env._printAllMECs())
-
