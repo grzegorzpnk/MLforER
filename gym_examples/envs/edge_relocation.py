@@ -193,7 +193,7 @@ class EdgeRelEnv(gym.Env):
 
     def _generateInitialLoadForTopology(self):
 
-        loads = [30, 40, 50, 60, 70, 80, 90]
+        loads = [30, 40, 50, 60, 70, 80]
         middle_of_range = random.choice(loads) # 70%
         low_boundries = middle_of_range - 10 #60
         high_boundries = middle_of_range + 10 #80
@@ -207,16 +207,15 @@ class EdgeRelEnv(gym.Env):
     def _selectStartingNode(self):
         cnt = 0
         while True:
-            randomMecId = random.randint(1, len(self.mec_nodes))
-            randomMecName = "mec" + str(randomMecId)
-            if self.mecApp.LatencyOK(self._getMecNodeByID(randomMecName)) and self.mecApp.ResourcesOK(self._getMecNodeByID(randomMecName)):
-                self._getMecNodeByID(randomMecName).cpu_utilization += self.mecApp.app_req_cpu/self._getMecNodeByID(randomMecName).cpu_capacity
-                self._getMecNodeByID(randomMecName).cpu_available = self._getMecNodeByID(randomMecName).cpu_capacity - self._getMecNodeByID(randomMecName).cpu_capacity * self._getMecNodeByID(randomMecName).cpu_utilization
+            randomMec = random.choice(self.mec_nodes)
+            if self.mecApp.LatencyOK(randomMec) and self.mecApp.ResourcesOK(randomMec):
+                randomMec.cpu_utilization += self.mecApp.app_req_cpu/randomMec.cpu_capacity
+                randomMec.cpu_available = randomMec.cpu_capacity - randomMec.cpu_capacity * randomMec.cpu_utilization
 
-                self._getMecNodeByID(randomMecName).memory_utilization += self.mecApp.app_req_memory / self._getMecNodeByID(randomMecName).memory_capacity
-                self._getMecNodeByID(randomMecName).memory_available = self._getMecNodeByID(randomMecName).memory_capacity - self._getMecNodeByID(randomMecName).memory_capacity * self._getMecNodeByID(randomMecName).memory_utilization
+                randomMec.memory_utilization += self.mecApp.app_req_memory / randomMec.memory_capacity
+                randomMec.memory_available = randomMec.memory_capacity - randomMec.memory_capacity * randomMec.memory_utilization
 
-                return self._getMecNodeByID(randomMecName)
+                return randomMec
             if cnt > 1000:
                 return None
             cnt += 1
@@ -316,6 +315,7 @@ class EdgeRelEnv(gym.Env):
         self.mecApp.user_position = self.trajectory[self.step]
 
         return True
+
 
     def calculateReward(self, is_relocation_done):
         '''
@@ -421,16 +421,36 @@ class MecApp:
 
     def ResourcesOK(self, mec):
         '''
-        This is supportive funtion to check resources conditions, used only for initial (for init state) placement of our main app.
+        This is supportive function to check resources conditions, used only for initial (for init state) placement of our main app.
         This func is not used to check conditions during the relocation, since it;s responisibility of agent
         :param mec:
         :return:
         '''
-        if mec.memory_available < self.app_req_memory < self.tau * mec.memory_capacity and mec.cpu_available < self.app_req_cpu < self.tau * mec.cpu_capacity:
+
+        if mec.cpu_available < self.app_req_cpu:
+            return False
+        elif mec.memory_available < self.app_req_memory:
+            return False
+        elif mec.cpu_utilization <= self.tau*100 and mec.memory_utilization <= self.tau*100:
             return True
         else:
             return False
+        #
+        #
+        #
+        # if mec.memory_available > self.app_req_memory and self.app_req_memory < self.tau * mec.memory_capacity and\
+        #         mec.cpu_available > self.app_req_cpu and self.app_req_cpu < self.tau * mec.cpu_capacity:
+        #     return True
+        # else:
+        #     return False
+
+
+        # if mec.memory_available < self.app_req_memory < self.tau * mec.memory_capacity and mec.cpu_available < self.app_req_cpu < self.tau * mec.cpu_capacity:
+        #     return True
+        # else:
+        #     return False
 
 
 env = EdgeRelEnv("topoconfig.json")
 print(env._printAllMECs())
+
