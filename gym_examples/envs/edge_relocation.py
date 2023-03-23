@@ -22,6 +22,7 @@ class EdgeRelEnv(gym.Env):
         self.step = 0
         self.trajectory = None
         self.mecApp = None
+        self.state = {}
 
         # generate inputs: iniital load, application and starting position (MEC and cell), trajectory
 
@@ -42,42 +43,51 @@ class EdgeRelEnv(gym.Env):
 
         # Define the action and observation space
         # todo: not every mec is available ( e.g. 2 do not exist)
-        self.action_space = gym.spaces.Discrete(len(self.mec_nodes), start=1)
+        # now agent can select any number 1-26, but some of the mec nodes does not exists, so we need to mask
+        self.action_space = gym.spaces.Discrete(self.specifyMaxIndexOfMEC(), start=1)
 
-        low_bound = np.zeros((len(self.mec_nodes), 5))  # initialize a 3x5 array filled with zeros
-        low_bound[:, 0] = 1  # Low bound of CPU Capacity is 1 ( == 4000 mvCPU)
-        low_bound[:, 1] = 0  # Low bound of CPU Utilization is 0%
-        low_bound[:, 2] = 1  # Low bound of Memory Capacity is 1 ( == 4000 Mb RAM)
-        low_bound[:, 3] = 0  # Low bound of Memory Utilization is 0%
-        low_bound[:, 4] = 1  # Low bound of unit cost is 1 ( == 0.33 == city-level)
+        ################## OBSERVABILITY SPACE ####################################
 
-        high_bound = np.ones((len(self.mec_nodes), 5))  # initialize a 3x5 array filled with zeros
-        high_bound[:, 0] = 3  # High bound of CPU Capacity is 3 ( == 12000 mvCPU)
-        high_bound[:, 1] = 100  # High bound of CPU Utilization is 100 [%]
-        high_bound[:, 2] = 3  # High bound of Memory Capacity is 3 ( == 12000 Mb RAM)
-        high_bound[:, 3] = 100  # High bound of Memory Utilization is 100 [%]
-        high_bound[:, 4] = 3  # High bound of unit cost is 3 ( == 1 == international-level)
+        # Multi-Dimension Box that represent every MEC host, each represented by 5 attributea
+        # : 1) CPU Capacity 2) CPU Utilization [%] 3) Memory Capacity 4) Memory Utilization [%] 5) Unit Cost
+        low_bound_mec = np.zeros((len(self.mec_nodes), 5))  # initialize a 3x5 array filled with zeros
+        low_bound_mec[:, 0] = 1  # Low bound of CPU Capacity is 1 ( == 4000 mvCPU)
+        low_bound_mec[:, 1] = 0  # Low bound of CPU Utilization is 0%
+        low_bound_mec[:, 2] = 1  # Low bound of Memory Capacity is 1 ( == 4000 Mb RAM)
+        low_bound_mec[:, 3] = 0  # Low bound of Memory Utilization is 0%
+        low_bound_mec[:, 4] = 1  # Low bound of unit cost is 1 ( == 0.33 == city-level)
 
-        # MEC  : 1) CPU Capacity 2) CPU Utilization [%] 3) Memory Capacity 4) Memory Utilization [%] 5) Unit Cost
-        space_MEC = gym.spaces.Box(shape=low_bound.shape, dtype=np.int32, low=low_bound, high=high_bound)
+        high_bound_mec = np.ones((len(self.mec_nodes), 5))  # initialize a 3x5 array filled with zeros
+        high_bound_mec[:, 0] = 3  # High bound of CPU Capacity is 3 ( == 12000 mvCPU)
+        high_bound_mec[:, 1] = 100  # High bound of CPU Utilization is 100 [%]
+        high_bound_mec[:, 2] = 3  # High bound of Memory Capacity is 3 ( == 12000 Mb RAM)
+        high_bound_mec[:, 3] = 100  # High bound of Memory Utilization is 100 [%]
+        high_bound_mec[:, 4] = 3  # High bound of unit cost is 3 ( == 1 == international-level)
 
-        # APP  : 1) Required mvCPU 2) required Memory 3) Required Latency 4) Current MEC 5) Current RAN
-        space_App = gym.spaces.MultiDiscrete(
-            [(1, 6), (1, 6), (1, 3), (1, len(self.mec_nodes)), (1, self.number_of_RANs)])
-        #
-        # space_APP = gym.spaces.Tuple((gym.spaces.Discrete(6, start=1),
-        #                               gym.spaces.Discrete(6, start=1),
-        #                               gym.spaces.Discrete(3, start=1),
-        #                               gym.spaces.Discrete(len(self.mec_nodes), start=1),
-        #                               gym.spaces.Discrete(self.number_of_RANs, start=1)),)
+        # 1Dimension Box that represent single application attributea
+        # 1) Required mvCPU 2) required Memory 3) Required Latency 4) Current MEC 5) Current RAN
+        low_bound_app = np.ones((1, 5))  # initialize a 1x5 array filled with ones
+        high_bound_app = np.ones((1, 5))  # initialize a 1x5 array filled with ones
+        high_bound_app[:, 0] = 6  # high bound of required mvCPU # 1:500, 2:600, 3:700... 6:1000
+        high_bound_app[:, 1] = 6  # high bound of required Memory #1:500, 2:600, 3:700... 6:1000
+        high_bound_app[:, 2] = 3  # high bound of Required Latency 1:10, 2:15, 3:25
+        high_bound_app[:, 3] = self.specifyMaxIndexOfMEC()  # high bound of CurrentMEC
+        high_bound_app[:, 4] = self.number_of_RANs  # high bound of CurrentRAN
 
-        self.observation_space = gym.spaces.Tuple((space_MEC, space_App))
+        self.observation_space = gym.spaces.Dict(
+            {
+                # MEC(for MEC each)    : 1) CPU Capacity 2) CPU Utilization [%] 3) Memory Capacity 4) Memory Utilization [%] 5) Unit Cost
+                # APP(for single app)  : 1) Required mvCPU 2) required Memory 3) Required Latency 4) Current MEC 5) Current RAN
+                "space_MEC": gym.spaces.Box(shape=low_bound_mec.shape, dtype=np.int32, low=low_bound_mec, high=high_bound_mec),
+                "space_App": gym.spaces.Box(shape=low_bound_app.shape, dtype=np.int32, low=low_bound_app, high=high_bound_app)
+            }
+        )
+
         self.state = self._get_state()
 
     def _get_state(self):
 
         space_MEC = np.zeros((len(self.mec_nodes), 5))
-        # space_MEC = gym.spaces.Box((len(self.mec_nodes), 5), low=low_bound, high=high_bound)
 
         # MEC  : 0) CPU Capacity 1) CPU Utilization [%] 2) Memory Capacity 3) Memory Utilization [%] 4) Unit Cost
         for i, mec_node in enumerate(self.mec_nodes):
@@ -87,55 +97,47 @@ class EdgeRelEnv(gym.Env):
             space_MEC[i, 3] = mec_node.memory_utilization
             space_MEC[i, 4] = self.determineStateofCost(mec_node.placement_cost)
 
-        # APP  : 1) Required mvCPU 2) required Memory 3) Required Latency 4) Current MEC 5) Current RAN
-        space_App = gym.spaces.MultiDiscrete([self.determineStateofAppReq(self.mecApp.app_req_cpu),
-                                              self.determineStateofAppReq(self.mecApp.app_req_memory),
-                                              self.determineStateofAppLatReq(self.mecApp.app_req_latency),
-                                              self.determineMecID(self.mecApp.current_MEC.id),
-                                              self.mecApp.user_position])
+        # APP  : [0,1] Required mvCPU  [0,2] required Memory [0,3] Required Latency [0,4] Current MEC [0,5] Current RAN
+        space_App = np.ones((1, 5))
+        space_App[0, 0] = self.determineReqRes(self.mecApp.app_req_cpu)
+        space_App[0, 1] = self.determineReqRes(self.mecApp.app_req_memory)
+        space_App[0, 2] = self.determineStateofAppLatReq(self.mecApp.app_req_latency)
+        space_App[0, 3] = self.determineMecID(self.mecApp.current_MEC.id)
+        space_App[0, 4] = self.mecApp.user_position
 
-        state = gym.spaces.Tuple((space_MEC, space_App))
-        return state
+        self.state["space_App"] = space_App
+        self.state["space_MEC"] = space_MEC
+
+        return self.state
+
+    def specifyMaxIndexOfMEC(self):
+        indexes = []
+        for node in self.mec_nodes:
+            indexes.append(self.determineMecID(node.id))
+        return max(indexes)
+
+    def determineReqRes(self, reqRes):
+        res_map = {500: 1, 600: 2, 700: 3, 800: 4, 900: 5, 1000: 6}
+        return res_map.get(reqRes, 0)
 
     def determineStateOfCapacity(self, capacityValue):
-        if capacityValue == 4000:
-            return 1
-        if capacityValue == 8000:
-            return 2
-        if capacityValue == 12000:
-            return 3
+        capacity_map = {4000: 1, 8000: 2, 12000: 3}
+        return capacity_map.get(capacityValue)
 
     def determineStateofCost(self, placement_cost):
-        if placement_cost == 0.33333:
-            return 1
-        if placement_cost == 0.66667:
-            return 2
-        if placement_cost == 1:
-            return 3
-
-    def determineStateofAppReq(self, reqValue):
-        if reqValue == 500:
-            return 1
-        if reqValue == 600:
-            return 2
-        if reqValue == 700:
-            return 3
-        if reqValue == 800:
-            return 4
-        if reqValue == 900:
-            return 5
-        if reqValue == 1000:
-            return 6
+        cost_map = {0.33333: 1, 0.66667: 2, 1: 3}
+        return cost_map.get(placement_cost, 0)
 
     def determineStateofAppLatReq(self, latValue):
-        if latValue == 10:
-            return 1
-        if latValue == 15:
-            return 2
-        if latValue == 25:
-            return 3
+        lat_map = {10: 1, 15: 2, 25: 3}
+        return lat_map.get(latValue, 0)
 
     def determineMecID(self, mecName):
+        '''
+        Supportive function, since in config file the mecID: "mec3", or "mec12", we need to extract only the ID, e.g. 3 or 12
+        :param mecName: name of mec read from config file
+        :return: ID (int) of mec
+        '''
         return int(mecName[3:])
 
     def _generateTrajectory(self, min_length, max_length):
@@ -202,26 +204,47 @@ class EdgeRelEnv(gym.Env):
 
     def _generateInitialLoadForTopology(self):
 
-        loads = [30, 40, 50, 60, 70, 80]
-        middle_of_range = random.choice(loads)  # 70%
-        low_boundries = middle_of_range - 10  # 60
-        high_boundries = middle_of_range + 10  # 80
+        # peak hour [60-90] # mid hour [40-70]  # low hour [10-40]  # radom case [10-90]
+
+        scenarios = ['peak_hours', 'low_hours', 'mid_hours', 'random']
+        current_scenario = random.choice(scenarios)
+
+        if current_scenario == 'peak_hours':
+            min = 60
+            max = 90
+        if current_scenario == 'mid_hours':
+            min = 40
+            max = 70
+        if current_scenario == 'low_hours':
+            min = 10
+            max = 40
+        if current_scenario == 'random':
+            min = 10
+            max = 90
 
         for mec in self.mec_nodes:
-            mec.cpu_utilization = random.randint(low_boundries, high_boundries)
+            mec.cpu_utilization = random.randint(min, max)
             mec.cpu_available = int(mec.cpu_capacity - mec.cpu_capacity * mec.cpu_utilization / 100)
-            mec.memory_utilization = random.randint(low_boundries, high_boundries)
-            mec.memory_available = int(mec.memory_capacity - mec.memory_capacity * mec.memory_utilization / 100)
+            if current_scenario == 'random':
+                # this if refers only to a case where random scenario were selected.
+                # I wanted to avoid situation, where cpu utilization is 10 % and mem util is 90 %,
+                # so I decided to put the same utilization value for both is such a case
+                mec.memory_utilization = mec.cpu_utilization
+                mec.memory_available = int(mec.memory_capacity - mec.memory_capacity * mec.memory_utilization / 100)
+            else:
+                mec.memory_utilization = random.randint(min, max)
+                mec.memory_available = int(mec.memory_capacity - mec.memory_capacity * mec.memory_utilization / 100)
+
 
     def _selectStartingNode(self):
         cnt = 0
         while True:
             randomMec = random.choice(self.mec_nodes)
             if self.mecApp.LatencyOK(randomMec) and self.mecApp.ResourcesOK(randomMec):
-                randomMec.cpu_utilization += self.mecApp.app_req_cpu / randomMec.cpu_capacity
+                randomMec.cpu_utilization += int(self.mecApp.app_req_cpu / randomMec.cpu_capacity * 100)
                 randomMec.cpu_available = randomMec.cpu_capacity - randomMec.cpu_capacity * randomMec.cpu_utilization
 
-                randomMec.memory_utilization += self.mecApp.app_req_memory / randomMec.memory_capacity
+                randomMec.memory_utilization += int(self.mecApp.app_req_memory / randomMec.memory_capacity * 100)
                 randomMec.memory_available = randomMec.memory_capacity - randomMec.memory_capacity * randomMec.memory_utilization
 
                 return randomMec
@@ -304,20 +327,20 @@ class EdgeRelEnv(gym.Env):
         # OLD NODE
         # take care of CPU
         currentNode.cpu_available -= self.mecApp.app_req_cpu
-        currentNode.cpu_utilization /= currentNode.cpu_capacity * 100
+        currentNode.cpu_utilization = int(currentNode.cpu_utilization / currentNode.cpu_capacity * 100)
 
         # take care of Memory
         currentNode.memory_available -= self.mecApp.app_req_memory
-        currentNode.memory_utilization /= currentNode.memory_capacity * 100
+        currentNode.memory_utilization = (currentNode.memory_utilization / currentNode.memory_capacity * 100)
 
         # NEW NODE
         # take care of CPU
         targetNode.cpu_available += self.mecApp.app_req_cpu
-        targetNode.cpu_utilization /= targetNode.cpu_capacity * 100
+        targetNode.cpu_utilization = int(targetNode.cpu_utilization / targetNode.cpu_capacity * 100)
 
         # take care of Memory
         targetNode.memory_available += self.mecApp.app_req_memory
-        targetNode.memory_utilization /= targetNode.memory_capacity * 100
+        targetNode.memory_utilization = int(targetNode.memory_utilization / targetNode.memory_capacity * 100)
 
         # Application udpate
         self.mecApp.current_MEC = targetNode
@@ -459,3 +482,4 @@ class MecApp:
 
 
 env = EdgeRelEnv("topoconfig.json")
+
