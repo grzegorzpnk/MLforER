@@ -27,24 +27,25 @@ class EdgeRelEnv(gym.Env):
         # generate inputs: iniital load, application and starting position (MEC and cell), trajectory
 
         # generate initial load
-        self._generateInitialLoadForTopology()
-
-        # generate trajectory
-        self.mobilityStateMachine = self._generateStateMachine()
-        self.trajectory = self._generateTrajectory(5, 25)
-
-        # generateApp
-        self.mecApp = self._generateMECApp()
-        self.mecApp.current_MEC = self._selectStartingNode()
-        while self.mecApp.current_MEC is None:
-            print("Cannot find any initial cluster for app. Generating new one")
-            self.mecApp = self._generateMECApp()
-            self.mecApp.current_MEC = self._selectStartingNode()
+        # self._generateInitialLoadForTopology()
+        #
+        # # generate trajectory
+        # self.mobilityStateMachine = self._generateStateMachine()
+        # self.trajectory = self._generateTrajectory(5, 25)
+        #
+        # # generateApp
+        # self.mecApp = self._generateMECApp()
+        # self.mecApp.current_MEC = self._selectStartingNode()
+        # while self.mecApp.current_MEC is None:
+        #     print("Cannot find any initial cluster for app. Generating new one")
+        #     self.mecApp = self._generateMECApp()
+        #     self.mecApp.current_MEC = self._selectStartingNode()
 
         # Define the action and observation space
         # todo: not every mec is available ( e.g. 2 do not exist)
         # now agent can select any number 1-26, but some of the mec nodes does not exists, so we need to mask
         self.action_space = gym.spaces.Discrete(self.specifyMaxIndexOfMEC(), start=1)
+        print(self.action_space.sample())
 
         ################## OBSERVABILITY SPACE ####################################
 
@@ -83,7 +84,7 @@ class EdgeRelEnv(gym.Env):
             }
         )
 
-        self.state = self._get_state()
+        #self.state = self._get_state()
 
     def _get_state(self):
 
@@ -318,7 +319,7 @@ class EdgeRelEnv(gym.Env):
         '''
         # check first if selected MEC is a current MEC
         currentNode = self._getMecNodeByID(self.mecApp.current_MEC.id)
-        targetNode = self._getMecNodeByID(action.targetNode)
+        targetNode = self._getMecNodeByID("mec"+str(action))
 
         if currentNode == targetNode:
             print("No relocation, since selected cluster is the same as a current")
@@ -450,6 +451,7 @@ class MecApp:
         else:
             return False
 
+    #todo: to be checked
     def ResourcesOK(self, mec):
         '''
         This is supportive function to check resources conditions, used only for initial (for init state) placement of our main app.
@@ -466,20 +468,6 @@ class MecApp:
             return True
         else:
             return False
-        #
-        #
-        #
-        # if mec.memory_available > self.app_req_memory and self.app_req_memory < self.tau * mec.memory_capacity and\
-        #         mec.cpu_available > self.app_req_cpu and self.app_req_cpu < self.tau * mec.cpu_capacity:
-        #     return True
-        # else:
-        #     return False
-
-        # if mec.memory_available < self.app_req_memory < self.tau * mec.memory_capacity and mec.cpu_available < self.app_req_cpu < self.tau * mec.cpu_capacity:
-        #     return True
-        # else:
-        #     return False
 
 
 env = EdgeRelEnv("topoconfig.json")
-
