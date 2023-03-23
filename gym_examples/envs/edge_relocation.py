@@ -4,14 +4,14 @@ from typing import Optional, Union, List
 import requests
 import numpy as np
 import gym
-from gym.core import RenderFrame
+# from gym.core import RenderFrame
 import json
 
 
 class EdgeRelEnv(gym.Env):
 
-    def render(self) -> Optional[Union[RenderFrame, List[RenderFrame]]]:
-        pass
+    # def render(self) -> Optional[Union[RenderFrame, List[RenderFrame]]]:
+    #     pass
 
     def __init__(self, configPath):
 
@@ -19,10 +19,11 @@ class EdgeRelEnv(gym.Env):
         # self.mec_nodes = self._fetchMECnodesConfig(endpoint)
         self.mec_nodes = self._readMECnodesConfig(configPath)
         self.number_of_RANs = len(self.mec_nodes[0].latency_array)
-        self.step = 0
+        self.steps = 0
         self.trajectory = None
         self.mecApp = None
         self.state = {}
+        self.mobilityStateMachine = self._generateStateMachine()
 
         # generate inputs: iniital load, application and starting position (MEC and cell), trajectory
 
@@ -258,7 +259,7 @@ class EdgeRelEnv(gym.Env):
         # todo: check if seed change is needed here
         super().reset()
 
-        self.step = 0
+        self.steps = 0
 
         # generate inputs: inital load, application, trajectory
 
@@ -291,7 +292,7 @@ class EdgeRelEnv(gym.Env):
         # Check that the action is within the action space
         assert self.action_space.contains(action)
 
-        self.step += 1
+        self.steps += 1
 
         relocation_done = self._relocateApplication(action)
 
@@ -304,7 +305,7 @@ class EdgeRelEnv(gym.Env):
 
         # Determine whether the episode is finished
         done = False
-        if self.step == len(self.trajectory):
+        if self.steps == len(self.trajectory):
             done = True
 
         # Return the new state, the reward, and whether the episode is finished
@@ -345,7 +346,7 @@ class EdgeRelEnv(gym.Env):
 
         # Application udpate
         self.mecApp.current_MEC = targetNode
-        self.mecApp.user_position = self.trajectory[self.step]
+        self.mecApp.user_position = self.trajectory[self.steps]
 
         return True
 
@@ -470,4 +471,5 @@ class MecApp:
             return False
 
 
-env = EdgeRelEnv("topoconfig.json")
+if __name__ == "__main__":
+    env = EdgeRelEnv("topoconfig.json")
