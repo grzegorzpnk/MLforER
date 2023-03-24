@@ -357,10 +357,11 @@ class EdgeRelEnv(gym.Env):
         :param is_relocation_done: check if we stayed at the same cluster or not
         :return: reward
         '''
-        if not is_relocation_done:  # we are staying at the same cluster, however this is because the action space was empty and current MEC was only one possible action ( even it does not meet constraint)
-            self.reward += 1
-            if not self.mecApp.LatencyOK(self.mecApp.current_MEC):
+        if not is_relocation_done:  # we are staying at the same cluster, let's check why
+            if not self.mecApp.LatencyOK(self.mecApp.current_MEC):  # we have stayed, however this is because the action space was empty and current MEC was only one possible action ( even it does not meet constraint)
                 self.reward += -10
+            else:
+                self.reward += 1
         else:
             mec = self.mecApp.current_MEC
             cost = (mec.cpu_utilization + mec.memory_utilization) * mec.placement_cost  # ([1 - 100] + [1 - 100]) * {0.3333; 0.6667; 1} -> max 200, min 0.666
