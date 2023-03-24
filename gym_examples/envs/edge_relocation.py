@@ -352,11 +352,13 @@ class EdgeRelEnv(gym.Env):
         return True
 
     def calculateReward(self, is_relocation_done):
-        '''
-        reward is reseted in reset() function, next during episode, it is incremented
+
+        """
+        reward is reseted only in reset() function at the beggining of episode, next during episode, it is modified in this function ( incremented mostly)
         :param is_relocation_done: check if we stayed at the same cluster or not
         :return: reward
-        '''
+        """
+
         if not is_relocation_done:  # we are staying at the same cluster, let's check why
             if not self.mecApp.LatencyOK(self.mecApp.current_MEC):  # we have stayed, however this is because the action space was empty and current MEC was only one possible action ( even it does not meet constraint)
                 self.reward += -10
