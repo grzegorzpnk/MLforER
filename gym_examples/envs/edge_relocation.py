@@ -3,15 +3,17 @@ from typing import Optional, Union, List
 
 import requests
 import numpy as np
-import gym
-from gym.core import RenderFrame
+import sys
+import gymnasium as gym
 import json
+sys.modules["gym"] = gym
+# from gym.core import RenderFrame
 
 
 class EdgeRelEnv(gym.Env):
 
-    def render(self) -> Optional[Union[RenderFrame, List[RenderFrame]]]:
-        pass
+    # def render(self) -> Optional[Union[RenderFrame, List[RenderFrame]]]:
+    #     pass
 
     def __init__(self, configPath):
 
@@ -23,29 +25,35 @@ class EdgeRelEnv(gym.Env):
         self.trajectory = None
         self.mecApp = None
         self.state = {}
+        self.mobilityStateMachine = self._generateStateMachine()
+
+        self.done = False
+        self.total_episodes = 0
+        self.relocations_done = 0
+        self.relocations_skipped = 0
 
         # generate inputs: iniital load, application and starting position (MEC and cell), trajectory
 
-        #generate initial load
-        self._generateInitialLoadForTopology()
-
-        # generate trajectory
-        self.mobilityStateMachine = self._generateStateMachine()
-        self.trajectory = self._generateTrajectory(5, 25)
-
-        # generateApp
-        self.mecApp = self._generateMECApp()
-        self.mecApp.current_MEC = self._selectStartingNode()
-        while self.mecApp.current_MEC is None:
-            print("Cannot find any initial cluster for app. Generating new one")
-            self.mecApp = self._generateMECApp()
-            self.mecApp.current_MEC = self._selectStartingNode()
+        # generate initial load
+        # self._generateInitialLoadForTopology()
+        #
+        # # generate trajectory
+        # self.mobilityStateMachine = self._generateStateMachine()
+        # self.trajectory = self._generateTrajectory(5, 25)
+        #
+        # # generateApp
+        # self.mecApp = self._generateMECApp()
+        # self.mecApp.current_MEC = self._selectStartingNode()
+        # while self.mecApp.current_MEC is None:
+        #     print("Cannot find any initial cluster for app. Generating new one")
+        #     self.mecApp = self._generateMECApp()
+        #     self.mecApp.current_MEC = self._selectStartingNode()
 
         # Define the action and observation space
         # todo: not every mec is available ( e.g. 2 do not exist)
         # now agent can select any number 1-26, but some of the mec nodes does not exists, so we need to mask
-        self.action_space = gym.spaces.Discrete(self.specifyMaxIndexOfMEC(), start=1)
-        print(self.action_space.sample())
+        self.action_space = gym.spaces.Discrete(n=self.specifyMaxIndexOfMEC(), start=1)
+        # print(self.action_space.sample())
 
         ################## OBSERVABILITY SPACE ####################################
 
@@ -79,10 +87,8 @@ class EdgeRelEnv(gym.Env):
             {
                 # MEC(for MEC each)    : 1) CPU Capacity 2) CPU Utilization [%] 3) Memory Capacity 4) Memory Utilization [%] 5) Unit Cost
                 # APP(for single app)  : 1) Required mvCPU 2) required Memory 3) Required Latency 4) Current MEC 5) Current RAN
-                "space_MEC": gym.spaces.Box(shape=low_bound_mec.shape, dtype=np.int32, low=low_bound_mec,
-                                            high=high_bound_mec),
-                "space_App": gym.spaces.Box(shape=low_bound_app.shape, dtype=np.int32, low=low_bound_app,
-                                            high=high_bound_app)
+                "space_MEC": gym.spaces.Box(shape=low_bound_mec.shape, dtype=np.int32, low=low_bound_mec, high=high_bound_mec),
+                "space_App": gym.spaces.Box(shape=low_bound_app.shape, dtype=np.int32, low=low_bound_app, high=high_bound_app)
             }
         )
 
@@ -136,11 +142,11 @@ class EdgeRelEnv(gym.Env):
         return lat_map.get(latValue, 0)
 
     def determineMecID(self, mecName):
-        '''
+        """
         Supportive function, since in config file the mecID: "mec3", or "mec12", we need to extract only the ID, e.g. 3 or 12
         :param mecName: name of mec read from config file
         :return: ID (int) of mec
-        '''
+        """
         return int(mecName[3:])
 
     def _generateTrajectory(self, min_length, max_length):
@@ -259,7 +265,9 @@ class EdgeRelEnv(gym.Env):
         # todo: check if seed change is needed here
         super().reset()
 
+        self.done = False
         self.step = 0
+        self.total_episodes += 1
         self.reward = 0
 
         # generate inputs: inital load, application, trajectory
@@ -283,15 +291,16 @@ class EdgeRelEnv(gym.Env):
         return self.state
 
     def step(self, action):
-        '''
+        """
         # We are assuming that the constraints are already checked by agent, and actions are masked -> here we need to move application only and update the state
         :param action:  ID of mec done where the application is relocated
         :param paramWeights: weights of particulary parts of Reward function ( should be declared at agent or env side?)
         :return:
-        '''
+        """
 
         # Check that the action is within the action space
-        assert self.action_space.contains(action)
+        # todo: check if its necessary
+        # assert self.action_space.contains(action)
 
         self.step += 1
 
@@ -304,28 +313,30 @@ class EdgeRelEnv(gym.Env):
         # reward = self._calculate_reward(state)
         reward = self.calculateReward(relocation_done)
 
-        # Determine whether the episode is finished
-        done = False
-        if self.step == len(self.trajectory):
-            done = True
+        # Determine whether the episode is finished. Use >= for manual testing
+        if self.step >= len(self.trajectory):
+            self.done = True
 
         # Return the new state, the reward, and whether the episode is finished
-        return self.state, reward, done, {}
+        return self.state, reward, self.done, {}
 
     def _relocateApplication(self, action):
-        '''
+        """
         :we are assuming that relocation MUST be finished with success, since the constraints are checked by agents and only allowed actions( latency OK, enough resources) are taken
         :todo: check what is under "action", seems that actions are int within range [0, length(mec_nodes)], but should be : [1 , length(mec_nodes)], maybe some dictionary for action space?
         :param action: currently action means the id of cluster where to relocate
         :return: true if app has been moved, false if app stayed at the same cluster
-        '''
+        """
         # check first if selected MEC is a current MEC
         currentNode = self._getMecNodeByID(self.mecApp.current_MEC.id)
         targetNode = self._getMecNodeByID("mec" + str(action))
 
         if currentNode == targetNode:
             print("No relocation, since selected cluster is the same as a current")
+            self.relocations_skipped += 1
             return False
+        else:
+            self.relocations_done += 1
 
         # OLD NODE
         # take care of CPU
@@ -345,7 +356,7 @@ class EdgeRelEnv(gym.Env):
         targetNode.memory_available += self.mecApp.app_req_memory
         targetNode.memory_utilization = int(targetNode.memory_utilization / targetNode.memory_capacity * 100)
 
-        # Application udpate
+        # Application update
         self.mecApp.current_MEC = targetNode
         self.mecApp.user_position = self.trajectory[self.step]
 
@@ -420,6 +431,13 @@ class EdgeRelEnv(gym.Env):
 
         return mobilityStateMachine
 
+    def print_summary(self):
+        print("----------------------------------------------------")
+        print(f"\t- Total no. of episodes: {self.total_episodes}")
+        print(f"\t- Total no. of done relocations: {self.relocations_done}")
+        print(f"\t- Total no. of skipped relocations: {self.relocations_skipped}")
+        print("----------------------------------------------------")
+
 
 class MecNode:
     # utilization -> percentage
@@ -446,12 +464,12 @@ class MecApp:
         self.current_MEC = None
 
     def LatencyOK(self, mec):
-        '''
+        """
         This is supportive funtion to check latency conditions, used only for initial (for init state) placement of our main app.
         This func is not used to check conditions during the relocation, since it;s responisibility of agent
         :param mec:
         :return:
-        '''
+        """
         # -1 cause latency_array[0] refers to the cell 1 etc..
         if mec.latency_array[self.user_position - 1] < self.app_req_latency:
             return True
@@ -460,12 +478,12 @@ class MecApp:
 
     # todo: to be checked
     def ResourcesOK(self, mec):
-        '''
+        """
         This is supportive function to check resources conditions, used only for initial (for init state) placement of our main app.
         This func is not used to check conditions during the relocation, since it;s responisibility of agent
         :param mec:
         :return:
-        '''
+        """
 
         if mec.cpu_available < self.app_req_cpu:
             return False
@@ -477,11 +495,5 @@ class MecApp:
             return False
 
 
-env = EdgeRelEnv("topoconfig.json")
-print(env.calculateReward(True))
-print(env.calculateReward(False))
-print(env.calculateReward(True))
-print(env.calculateReward(True))
-print(env.calculateReward(True))
-print(env.calculateReward(True))
-
+if __name__ == "__main__":
+    env = EdgeRelEnv("topoconfig.json")
