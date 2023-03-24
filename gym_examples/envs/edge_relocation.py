@@ -364,7 +364,7 @@ class EdgeRelEnv(gym.Env):
         else:
             mec = self.mecApp.current_MEC
             cost = (mec.cpu_utilization + mec.memory_utilization) * mec.placement_cost  # ([1 - 100] + [1 - 100]) * {0.3333; 0.6667; 1} -> max 200, min 0.666
-            normalized_cost = cost / 200  # -> min 0.00333, max 1
+            normalized_cost = cost / 200  # -> min 0.00333, max 1g
             self.reward += (1 - normalized_cost)
         return self.reward
 
