@@ -20,7 +20,7 @@ class EdgeRelEnv(gym.Env):
         # read initial topology config from file
         self.mec_nodes = self._readMECnodesConfig(configPath)
         self.number_of_RANs = len(self.mec_nodes[0].latency_array)
-        self.step = 0
+        self.current_step = 0
         self.reward = 0
         self.trajectory = None
         self.mecApp = None
@@ -266,7 +266,7 @@ class EdgeRelEnv(gym.Env):
         super().reset()
 
         self.done = False
-        self.step = 0
+        self.current_step = 0
         self.total_episodes += 1
         self.reward = 0
 
@@ -302,7 +302,7 @@ class EdgeRelEnv(gym.Env):
         # todo: check if its necessary
         # assert self.action_space.contains(action)
 
-        self.step += 1
+        self.current_step += 1
 
         relocation_done = self._relocateApplication(action)
 
@@ -314,7 +314,7 @@ class EdgeRelEnv(gym.Env):
         reward = self.calculateReward(relocation_done)
 
         # Determine whether the episode is finished. Use >= for manual testing
-        if self.step >= len(self.trajectory):
+        if self.current_step >= len(self.trajectory):
             self.done = True
 
         # Return the new state, the reward, and whether the episode is finished
@@ -358,7 +358,7 @@ class EdgeRelEnv(gym.Env):
 
         # Application update
         self.mecApp.current_MEC = targetNode
-        self.mecApp.user_position = self.trajectory[self.step]
+        self.mecApp.user_position = self.trajectory[self.current_step]
 
         return True
 
