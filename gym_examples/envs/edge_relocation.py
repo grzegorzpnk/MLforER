@@ -15,31 +15,31 @@ class EdgeRelEnv(gym.Env):
 
     def __init__(self, configPath):
 
-        # read initial topology config from external simulator
-        # self.mec_nodes = self._fetchMECnodesConfig(endpoint)
+        # read initial topology config from file
         self.mec_nodes = self._readMECnodesConfig(configPath)
         self.number_of_RANs = len(self.mec_nodes[0].latency_array)
         self.step = 0
+        self.reward = 0
         self.trajectory = None
         self.mecApp = None
         self.state = {}
 
         # generate inputs: iniital load, application and starting position (MEC and cell), trajectory
 
-        # generate initial load
-        # self._generateInitialLoadForTopology()
-        #
-        # # generate trajectory
-        # self.mobilityStateMachine = self._generateStateMachine()
-        # self.trajectory = self._generateTrajectory(5, 25)
-        #
-        # # generateApp
-        # self.mecApp = self._generateMECApp()
-        # self.mecApp.current_MEC = self._selectStartingNode()
-        # while self.mecApp.current_MEC is None:
-        #     print("Cannot find any initial cluster for app. Generating new one")
-        #     self.mecApp = self._generateMECApp()
-        #     self.mecApp.current_MEC = self._selectStartingNode()
+        #generate initial load
+        self._generateInitialLoadForTopology()
+
+        # generate trajectory
+        self.mobilityStateMachine = self._generateStateMachine()
+        self.trajectory = self._generateTrajectory(5, 25)
+
+        # generateApp
+        self.mecApp = self._generateMECApp()
+        self.mecApp.current_MEC = self._selectStartingNode()
+        while self.mecApp.current_MEC is None:
+            print("Cannot find any initial cluster for app. Generating new one")
+            self.mecApp = self._generateMECApp()
+            self.mecApp.current_MEC = self._selectStartingNode()
 
         # Define the action and observation space
         # todo: not every mec is available ( e.g. 2 do not exist)
@@ -79,12 +79,14 @@ class EdgeRelEnv(gym.Env):
             {
                 # MEC(for MEC each)    : 1) CPU Capacity 2) CPU Utilization [%] 3) Memory Capacity 4) Memory Utilization [%] 5) Unit Cost
                 # APP(for single app)  : 1) Required mvCPU 2) required Memory 3) Required Latency 4) Current MEC 5) Current RAN
-                "space_MEC": gym.spaces.Box(shape=low_bound_mec.shape, dtype=np.int32, low=low_bound_mec, high=high_bound_mec),
-                "space_App": gym.spaces.Box(shape=low_bound_app.shape, dtype=np.int32, low=low_bound_app, high=high_bound_app)
+                "space_MEC": gym.spaces.Box(shape=low_bound_mec.shape, dtype=np.int32, low=low_bound_mec,
+                                            high=high_bound_mec),
+                "space_App": gym.spaces.Box(shape=low_bound_app.shape, dtype=np.int32, low=low_bound_app,
+                                            high=high_bound_app)
             }
         )
 
-        #self.state = self._get_state()
+        # self.state = self._get_state()
 
     def _get_state(self):
 
@@ -236,7 +238,6 @@ class EdgeRelEnv(gym.Env):
                 mec.memory_utilization = random.randint(min, max)
                 mec.memory_available = int(mec.memory_capacity - mec.memory_capacity * mec.memory_utilization / 100)
 
-
     def _selectStartingNode(self):
         cnt = 0
         while True:
@@ -259,6 +260,7 @@ class EdgeRelEnv(gym.Env):
         super().reset()
 
         self.step = 0
+        self.reward = 0
 
         # generate inputs: inital load, application, trajectory
 
@@ -319,7 +321,7 @@ class EdgeRelEnv(gym.Env):
         '''
         # check first if selected MEC is a current MEC
         currentNode = self._getMecNodeByID(self.mecApp.current_MEC.id)
-        targetNode = self._getMecNodeByID("mec"+str(action))
+        targetNode = self._getMecNodeByID("mec" + str(action))
 
         if currentNode == targetNode:
             print("No relocation, since selected cluster is the same as a current")
@@ -351,18 +353,20 @@ class EdgeRelEnv(gym.Env):
 
     def calculateReward(self, is_relocation_done):
         '''
-        func to calculate reward after each step
-        :param is_relocation_done: this params refers to
-        :return:
+        reward is reseted in reset() function, next during episode, it is incremented
+        :param is_relocation_done: check if we stayed at the same cluster or not
+        :return: reward
         '''
-
-        if not is_relocation_done:
-            reward = 1
+        if not is_relocation_done:  # we are staying at the same cluster, however this is because the action space was empty and current MEC was only one possible action ( even it does not meet constraint)
+            self.reward += 1
+            if not self.mecApp.LatencyOK(self.mecApp.current_MEC):
+                self.reward += -10
         else:
-            reward = 0
-        #########################
-
-        return reward
+            mec = self.mecApp.current_MEC
+            cost = (mec.cpu_utilization + mec.memory_utilization) * mec.placement_cost  # ([1 - 100] + [1 - 100]) * {0.3333; 0.6667; 1} -> max 200, min 0.666
+            normalized_cost = cost / 200  # -> min 0.00333, max 1
+            self.reward += (1 - normalized_cost)
+        return self.reward
 
     def _generateStateMachine(self):
 
@@ -451,7 +455,7 @@ class MecApp:
         else:
             return False
 
-    #todo: to be checked
+    # todo: to be checked
     def ResourcesOK(self, mec):
         '''
         This is supportive function to check resources conditions, used only for initial (for init state) placement of our main app.
@@ -471,3 +475,10 @@ class MecApp:
 
 
 env = EdgeRelEnv("topoconfig.json")
+print(env.calculateReward(True))
+print(env.calculateReward(False))
+print(env.calculateReward(True))
+print(env.calculateReward(True))
+print(env.calculateReward(True))
+print(env.calculateReward(True))
+
