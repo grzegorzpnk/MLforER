@@ -1,6 +1,6 @@
 [
     {
-        "id": "mec12",
+        "id": "mec8",
         "cpu_capacity": 4000,
         "memory_capacity": 4000,
         "cpu_utilization": 0,
@@ -52,7 +52,7 @@
         "placement_cost": 1
     },
     {
-        "id": "mec13",
+        "id": "mec9",
         "cpu_capacity": 4000,
         "memory_capacity": 4000,
         "cpu_utilization": 0,
@@ -104,7 +104,7 @@
         "placement_cost": 1
     },
     {
-        "id": "mec14",
+        "id": "mec10",
         "cpu_capacity": 4000,
         "memory_capacity": 4000,
         "cpu_utilization": 0,
@@ -156,7 +156,7 @@
         "placement_cost": 1
     },
     {
-        "id": "mec11",
+        "id": "mec7",
         "cpu_capacity": 4000,
         "memory_capacity": 4000,
         "cpu_utilization": 0,
@@ -208,7 +208,7 @@
         "placement_cost": 1
     },
     {
-        "id": "mec16",
+        "id": "mec12",
         "cpu_capacity": 4000,
         "memory_capacity": 4000,
         "cpu_utilization": 0,
@@ -260,7 +260,7 @@
         "placement_cost": 1
     },
     {
-        "id": "mec17",
+        "id": "mec13",
         "cpu_capacity": 4000,
         "memory_capacity": 4000,
         "cpu_utilization": 0,
@@ -312,7 +312,7 @@
         "placement_cost": 1
     },
     {
-        "id": "mec18",
+        "id": "mec14",
         "cpu_capacity": 4000,
         "memory_capacity": 4000,
         "cpu_utilization": 0,
@@ -364,7 +364,7 @@
         "placement_cost": 1
     },
     {
-        "id": "mec15",
+        "id": "mec11",
         "cpu_capacity": 4000,
         "memory_capacity": 4000,
         "cpu_utilization": 0,
@@ -416,7 +416,7 @@
         "placement_cost": 1
     },
     {
-        "id": "mec20",
+        "id": "mec16",
         "cpu_capacity": 4000,
         "memory_capacity": 4000,
         "cpu_utilization": 0,
@@ -468,7 +468,7 @@
         "placement_cost": 1
     },
     {
-        "id": "mec21",
+        "id": "mec17",
         "cpu_capacity": 4000,
         "memory_capacity": 4000,
         "cpu_utilization": 0,
@@ -520,7 +520,7 @@
         "placement_cost": 1
     },
     {
-        "id": "mec22",
+        "id": "mec18",
         "cpu_capacity": 4000,
         "memory_capacity": 4000,
         "cpu_utilization": 0,
@@ -572,7 +572,7 @@
         "placement_cost": 1
     },
     {
-        "id": "mec19",
+        "id": "mec15",
         "cpu_capacity": 4000,
         "memory_capacity": 4000,
         "cpu_utilization": 0,
@@ -624,7 +624,7 @@
         "placement_cost": 1
     },
     {
-        "id": "mec24",
+        "id": "mec20",
         "cpu_capacity": 4000,
         "memory_capacity": 4000,
         "cpu_utilization": 0,
@@ -676,7 +676,7 @@
         "placement_cost": 1
     },
     {
-        "id": "mec25",
+        "id": "mec21",
         "cpu_capacity": 4000,
         "memory_capacity": 4000,
         "cpu_utilization": 0,
@@ -728,7 +728,7 @@
         "placement_cost": 1
     },
     {
-        "id": "mec26",
+        "id": "mec22",
         "cpu_capacity": 4000,
         "memory_capacity": 4000,
         "cpu_utilization": 0,
@@ -780,7 +780,7 @@
         "placement_cost": 1
     },
     {
-        "id": "mec23",
+        "id": "mec19",
         "cpu_capacity": 4000,
         "memory_capacity": 4000,
         "cpu_utilization": 0,
@@ -832,7 +832,7 @@
         "placement_cost": 1
     },
     {
-        "id": "mec3",
+        "id": "mec2",
         "cpu_capacity": 8000,
         "memory_capacity": 8000,
         "cpu_utilization": 0,
@@ -884,7 +884,7 @@
         "placement_cost": 0.66667
     },
     {
-        "id": "mec4",
+        "id": "mec3",
         "cpu_capacity": 8000,
         "memory_capacity": 8000,
         "cpu_utilization": 0,
@@ -936,7 +936,7 @@
         "placement_cost": 0.66667
     },
     {
-        "id": "mec5",
+        "id": "mec4",
         "cpu_capacity": 8000,
         "memory_capacity": 8000,
         "cpu_utilization": 0,
@@ -988,7 +988,7 @@
         "placement_cost": 0.66667
     },
     {
-        "id": "mec6",
+        "id": "mec5",
         "cpu_capacity": 8000,
         "memory_capacity": 8000,
         "cpu_utilization": 0,
@@ -1040,7 +1040,7 @@
         "placement_cost": 0.66667
     },
     {
-        "id": "mec7",
+        "id": "mec6",
         "cpu_capacity": 8000,
         "memory_capacity": 8000,
         "cpu_utilization": 0,

@@ -1,19 +1,13 @@
 import random
-from typing import Optional, Union, List
-
-import requests
 import numpy as np
 import sys
 import gymnasium as gym
 import json
+
 sys.modules["gym"] = gym
-# from gym.core import RenderFrame
 
 
 class EdgeRelEnv(gym.Env):
-
-    # def render(self) -> Optional[Union[RenderFrame, List[RenderFrame]]]:
-    #     pass
 
     def __init__(self, configPath):
 
@@ -28,7 +22,7 @@ class EdgeRelEnv(gym.Env):
         self.mobilityStateMachine = self._generateStateMachine()
 
         self.done = False
-        self.total_episodes = 0
+        self.episodes_counter = 0
         self.relocations_done = 0
         self.relocations_skipped = 0
 
@@ -50,10 +44,9 @@ class EdgeRelEnv(gym.Env):
         #     self.mecApp.current_MEC = self._selectStartingNode()
 
         # Define the action and observation space
-        # todo: not every mec is available ( e.g. 2 do not exist)
-        # now agent can select any number 1-26, but some of the mec nodes does not exists, so we need to mask
-        self.action_space = gym.spaces.Discrete(n=self.specifyMaxIndexOfMEC(), start=1)
-        # print(self.action_space.sample())
+
+        self.action_space = gym.spaces.Discrete(n=len(self.mec_nodes), start=1)
+
 
         ################## OBSERVABILITY SPACE ####################################
 
@@ -87,8 +80,10 @@ class EdgeRelEnv(gym.Env):
             {
                 # MEC(for MEC each)    : 1) CPU Capacity 2) CPU Utilization [%] 3) Memory Capacity 4) Memory Utilization [%] 5) Unit Cost
                 # APP(for single app)  : 1) Required mvCPU 2) required Memory 3) Required Latency 4) Current MEC 5) Current RAN
-                "space_MEC": gym.spaces.Box(shape=low_bound_mec.shape, dtype=np.int32, low=low_bound_mec, high=high_bound_mec),
-                "space_App": gym.spaces.Box(shape=low_bound_app.shape, dtype=np.int32, low=low_bound_app, high=high_bound_app)
+                "space_MEC": gym.spaces.Box(shape=low_bound_mec.shape, dtype=np.int32, low=low_bound_mec,
+                                            high=high_bound_mec),
+                "space_App": gym.spaces.Box(shape=low_bound_app.shape, dtype=np.int32, low=low_bound_app,
+                                            high=high_bound_app)
             }
         )
 
@@ -118,12 +113,6 @@ class EdgeRelEnv(gym.Env):
         self.state["space_MEC"] = space_MEC
 
         return self.state
-
-    def specifyMaxIndexOfMEC(self):
-        indexes = []
-        for node in self.mec_nodes:
-            indexes.append(self.determineMecID(node.id))
-        return max(indexes)
 
     def determineReqRes(self, reqRes):
         res_map = {500: 1, 600: 2, 700: 3, 800: 4, 900: 5, 1000: 6}
@@ -267,7 +256,7 @@ class EdgeRelEnv(gym.Env):
 
         self.done = False
         self.current_step = 0
-        self.total_episodes += 1
+        self.episodes_counter += 1
         self.reward = 0
 
         # generate inputs: inital load, application, trajectory
@@ -371,7 +360,8 @@ class EdgeRelEnv(gym.Env):
         """
 
         if not is_relocation_done:  # we are staying at the same cluster, let's check why
-            if not self.mecApp.LatencyOK(self.mecApp.current_MEC):  # we have stayed, however this is because the action space was empty and current MEC was only one possible action ( even it does not meet constraint)
+            if not self.mecApp.LatencyOK(
+                    self.mecApp.current_MEC):  # we have stayed, however this is because the action space was empty and current MEC was only one possible action ( even it does not meet constraint)
                 self.reward += -10
             else:
                 self.reward += 1
@@ -433,7 +423,7 @@ class EdgeRelEnv(gym.Env):
 
     def print_summary(self):
         print("----------------------------------------------------")
-        print(f"\t- Total no. of episodes: {self.total_episodes}")
+        print(f"\t- Total no. of episodes: {self.episodes_counter}")
         print(f"\t- Total no. of done relocations: {self.relocations_done}")
         print(f"\t- Total no. of skipped relocations: {self.relocations_skipped}")
         print("----------------------------------------------------")
