@@ -295,9 +295,6 @@ class EdgeRelEnv(gym.Env):
 
         relocation_done = self._relocateApplication(action)
 
-        # Update the state of the environment
-        self.state = self._get_state()
-
         # Calculate the reward based on the new state
         # reward = self._calculate_reward(state)
         reward = self.calculateReward(relocation_done)
@@ -305,6 +302,12 @@ class EdgeRelEnv(gym.Env):
         # Determine whether the episode is finished. Use >= for manual testing
         if self.current_step >= len(self.trajectory):
             self.done = True
+        else:
+            # select next position of UE. Please see that this should be removed out of the obs space ( if masking), since it does not influence on reward
+            self.mecApp.user_position = self.trajectory[self.current_step]
+
+        # Update the state of the environment
+        self.state = self._get_state()
 
         # Return the new state, the reward, and whether the episode is finished
         return self.state, reward, self.done, {}
@@ -347,7 +350,6 @@ class EdgeRelEnv(gym.Env):
 
         # Application update
         self.mecApp.current_MEC = targetNode
-        self.mecApp.user_position = self.trajectory[self.current_step]
 
         return True
 
