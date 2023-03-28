@@ -25,6 +25,7 @@ class EdgeRelEnv(gym.Env):
         self.episodes_counter = 0
         self.relocations_done = 0
         self.relocations_skipped = 0
+        self.mask = []
 
         # generate inputs: iniital load, application and starting position (MEC and cell), trajectory
 
@@ -46,7 +47,6 @@ class EdgeRelEnv(gym.Env):
         # Define the action and observation space
 
         self.action_space = gym.spaces.Discrete(n=len(self.mec_nodes), start=1)
-
 
         ################## OBSERVABILITY SPACE ####################################
 
@@ -208,20 +208,20 @@ class EdgeRelEnv(gym.Env):
         current_scenario = random.choice(scenarios)
 
         if current_scenario == 'peak_hours':
-            min = 60
-            max = 90
+            _min = 60
+            _max = 90
         if current_scenario == 'mid_hours':
-            min = 40
-            max = 70
+            _min = 40
+            _max = 70
         if current_scenario == 'low_hours':
-            min = 10
-            max = 40
+            _min = 10
+            _max = 40
         if current_scenario == 'random':
-            min = 10
-            max = 90
+            _min = 10
+            _max = 90
 
         for mec in self.mec_nodes:
-            mec.cpu_utilization = random.randint(min, max)
+            mec.cpu_utilization = random.randint(_min, _max)
             mec.cpu_available = int(mec.cpu_capacity - mec.cpu_capacity * mec.cpu_utilization / 100)
             if current_scenario == 'random':
                 # this if refers only to a case where random scenario were selected.
@@ -230,7 +230,7 @@ class EdgeRelEnv(gym.Env):
                 mec.memory_utilization = mec.cpu_utilization
                 mec.memory_available = int(mec.memory_capacity - mec.memory_capacity * mec.memory_utilization / 100)
             else:
-                mec.memory_utilization = random.randint(min, max)
+                mec.memory_utilization = random.randint(_min, _max)
                 mec.memory_available = int(mec.memory_capacity - mec.memory_capacity * mec.memory_utilization / 100)
 
     def _selectStartingNode(self):
@@ -277,6 +277,9 @@ class EdgeRelEnv(gym.Env):
 
         self.state = self._get_state()
 
+        # calculate mask for first step
+        self._calculateMask()
+
         return self.state
 
     def step(self, action):
@@ -305,12 +308,30 @@ class EdgeRelEnv(gym.Env):
         else:
             # select next position of UE. Please see that this should be removed out of the obs space ( if masking), since it does not influence on reward
             self.mecApp.user_position = self.trajectory[self.current_step]
+            # calculate mask for next step
+            self._calculateMask()
 
         # Update the state of the environment
         self.state = self._get_state()
 
         # Return the new state, the reward, and whether the episode is finished
         return self.state, reward, self.done, {}
+
+    def _calculateMask(self):
+        # reset previous mask
+        self.mask.clear()
+
+        for mec in self.mec_nodes:
+            if mec == self.mecApp.current_MEC:
+                self.mask.append(True)
+            else:
+                if self.mecApp.LatencyOK(mec) and self.mecApp.ResourcesOK(mec):
+                    self.mask.append(True)
+                else:
+                    self.mask.append(False)
+
+    def returnMask(self):
+        return list(self._mask)
 
     def _relocateApplication(self, action):
         """
@@ -489,3 +510,5 @@ class MecApp:
 
 if __name__ == "__main__":
     env = EdgeRelEnv("topoconfig.json")
+    env.reset()
+    print(env.returnMask())
