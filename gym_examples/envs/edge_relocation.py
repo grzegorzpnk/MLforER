@@ -27,7 +27,7 @@ class EdgeRelEnv(gym.Env):
         self.relocations_skipped = 0
         self.mask = []
 
-        # generate inputs: iniital load, application and starting position (MEC and cell), trajectory
+        # generate inputs: initial load, application and starting position (MEC and cell), trajectory
 
         # generate initial load
         # self._generateInitialLoadForTopology()
@@ -321,7 +321,10 @@ class EdgeRelEnv(gym.Env):
         # reset previous mask
         self.mask.clear()
 
-        for mec in self.mec_nodes:
+        copy_mec_nodes = self.mec_nodes.copy()
+        copy_mec_nodes.sort(key=self.sort_by_id)
+
+        for mec in copy_mec_nodes:
             if mec == self.mecApp.current_MEC:
                 self.mask.append(True)
             else:
@@ -331,7 +334,10 @@ class EdgeRelEnv(gym.Env):
                     self.mask.append(False)
 
     def returnMask(self):
-        return list(self._mask)
+        return list(self.mask)
+
+    def sort_by_id(self, node):
+        return int(node.id[3:])
 
     def _relocateApplication(self, action):
         """
@@ -508,7 +514,7 @@ class MecApp:
             return False
 
 
-if __name__ == "__main__":
-    env = EdgeRelEnv("topoconfig.json")
-    env.reset()
-    print(env.returnMask())
+#
+env = EdgeRelEnv("topoconfig.json")
+env.reset()
+print(env.returnMask())
