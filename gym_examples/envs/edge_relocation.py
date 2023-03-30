@@ -197,7 +197,7 @@ class EdgeRelEnv(gym.Env):
                 )
                 mec_nodes.append(mec_node)
 
-        print(mec_nodes)
+        # print(mec_nodes)
         return mec_nodes
 
     def _generateInitialLoadForTopology(self):
@@ -333,7 +333,7 @@ class EdgeRelEnv(gym.Env):
                 else:
                     self.mask.append(False)
 
-    def returnMask(self):
+    def action_masks(self):
         return list(self.mask)
 
     def sort_by_id(self, node):
@@ -387,10 +387,10 @@ class EdgeRelEnv(gym.Env):
         :param is_relocation_done: check if we stayed at the same cluster or not
         :return: reward
         """
+        #todo: include the number of trajectory
 
         if not is_relocation_done:  # we are staying at the same cluster, let's check why
-            if not self.mecApp.LatencyOK(
-                    self.mecApp.current_MEC):  # we have stayed, however this is because the action space was empty and current MEC was only one possible action ( even it does not meet constraint)
+            if not self.mecApp.LatencyOK(self.mecApp.current_MEC):  # we have stayed, however this is because the action space was empty and current MEC was only one possible action ( even it does not meet constraint)
                 self.reward += -10
             else:
                 self.reward += 1
@@ -515,6 +515,6 @@ class MecApp:
 
 
 #
-env = EdgeRelEnv("topoconfig.json")
-env.reset()
-print(env.returnMask())
+# env = EdgeRelEnv("topoconfig.json")
+# env.reset()
+# print(env.returnMask())
