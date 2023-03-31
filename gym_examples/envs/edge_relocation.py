@@ -330,23 +330,24 @@ class EdgeRelEnv(gym.Env):
         else:
             self.relocations_done += 1
 
+        #improved version
         # OLD NODE
         # take care of CPU
-        currentNode.cpu_available -= self.mecApp.app_req_cpu
-        currentNode.cpu_utilization = int(currentNode.cpu_utilization / currentNode.cpu_capacity * 100)
+        currentNode.cpu_utilization -= int(self.mecApp.app_req_cpu / currentNode.cpu_capacity * 100)
+        currentNode.cpu_available = currentNode.cpu_capacity - currentNode.cpu_capacity * currentNode.cpu_utilization
 
         # take care of Memory
-        currentNode.memory_available -= self.mecApp.app_req_memory
-        currentNode.memory_utilization = (currentNode.memory_utilization / currentNode.memory_capacity * 100)
+        currentNode.memory_utilization -= int(self.mecApp.app_req_memory / currentNode.memory_capacity * 100)
+        currentNode.memory_available = currentNode.memory_capacity - currentNode.memory_capacity * currentNode.memory_utilization
 
         # NEW NODE
         # take care of CPU
-        targetNode.cpu_available += self.mecApp.app_req_cpu
-        targetNode.cpu_utilization = int(targetNode.cpu_utilization / targetNode.cpu_capacity * 100)
+        targetNode.cpu_utilization += int(self.mecApp.app_req_cpu / targetNode.cpu_capacity * 100)
+        targetNode.cpu_available = targetNode.cpu_capacity - targetNode.cpu_capacity * targetNode.cpu_utilization
 
         # take care of Memory
-        targetNode.memory_available += self.mecApp.app_req_memory
-        targetNode.memory_utilization = int(targetNode.memory_utilization / targetNode.memory_capacity * 100)
+        targetNode.memory_utilization += int(self.mecApp.app_req_memory / targetNode.memory_capacity * 100)
+        targetNode.memory_available = targetNode.memory_capacity - targetNode.memory_capacity * targetNode.memory_utilization
 
         # Application update
         self.mecApp.current_MEC = targetNode
