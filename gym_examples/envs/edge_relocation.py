@@ -1,7 +1,9 @@
 import random
+
+import gymnasium as gym
 import numpy as np
 import sys
-import gymnasium as gym
+# import gym
 import json
 
 sys.modules["gym"] = gym
@@ -46,7 +48,7 @@ class EdgeRelEnv(gym.Env):
 
         # Define the action and observation space
 
-        self.action_space = gym.spaces.Discrete(n=len(self.mec_nodes), start=1)
+        self.action_space = gym.spaces.discrete.Discrete(n=len(self.mec_nodes))
 
         ################## OBSERVABILITY SPACE ####################################
 
@@ -76,13 +78,13 @@ class EdgeRelEnv(gym.Env):
         high_bound_app[:, 3] = len(self.mec_nodes)  # high bound of CurrentMEC
         high_bound_app[:, 4] = self.number_of_RANs  # high bound of CurrentRAN
 
-        self.observation_space = gym.spaces.Dict(
+        self.observation_space = gym.spaces.dict.Dict(
             {
                 # MEC(for MEC each)    : 1) CPU Capacity 2) CPU Utilization [%] 3) Memory Capacity 4) Memory Utilization [%] 5) Unit Cost
                 # APP(for single app)  : 1) Required mvCPU 2) required Memory 3) Required Latency 4) Current MEC 5) Current RAN
-                "space_MEC": gym.spaces.Box(shape=low_bound_mec.shape, dtype=np.int32, low=low_bound_mec,
+                "space_MEC": gym.spaces.box.Box(shape=low_bound_mec.shape, dtype=np.int32, low=low_bound_mec,
                                             high=high_bound_mec),
-                "space_App": gym.spaces.Box(shape=low_bound_app.shape, dtype=np.int32, low=low_bound_app,
+                "space_App": gym.spaces.box.Box(shape=low_bound_app.shape, dtype=np.int32, low=low_bound_app,
                                             high=high_bound_app)
             }
         )
@@ -252,7 +254,7 @@ class EdgeRelEnv(gym.Env):
     def reset(self):
 
         # todo: check if seed change is needed here
-        super().reset()
+        # super().reset()
 
         self.done = False
         self.current_step = 0
@@ -351,7 +353,7 @@ class EdgeRelEnv(gym.Env):
         targetNode = self._getMecNodeByID("mec" + str(action))
 
         if currentNode == targetNode:
-            print("No relocation, since selected cluster is the same as a current")
+            #print(self.current_step, "No relocation, since selected cluster is the same as a current")
             self.relocations_skipped += 1
             return False
         else:
