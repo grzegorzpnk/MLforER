@@ -236,6 +236,10 @@ class EdgeRelEnv(gym.Env):
                 mec.memory_utilization = random.randint(_min, _max)
                 mec.memory_available = int(mec.memory_capacity - mec.memory_capacity * mec.memory_utilization / 100)
 
+        print("initial load:")
+        for mec in self.mec_nodes:
+            print("mec: ", mec.id, "cpu: ", mec.cpu_utilization, "memory: ", mec.memory_utilization)
+
     def _selectStartingNode(self):
         cnt = 0
         while True:
@@ -307,7 +311,7 @@ class EdgeRelEnv(gym.Env):
         # Calculate the reward based on the new state
         # reward = self._calculate_reward(state)
         reward = self.calculateReward2(relocation_done)
-        print("reward: ", reward)
+        print("reward in step func: ", reward)
 
         # Determine whether the episode is finished. Use >= for manual testing
         if self.current_step >= len(self.trajectory):
@@ -366,8 +370,9 @@ class EdgeRelEnv(gym.Env):
 
         # OLD NODE
         # take care of CPU
-        currentNode.cpu_available -= self.mecApp.app_req_cpu
+
         currentNode.cpu_utilization = int(currentNode.cpu_utilization / currentNode.cpu_capacity * 100)
+        currentNode.cpu_available -= self.mecApp.app_req_cpu
 
         # take care of Memory
         currentNode.memory_available -= self.mecApp.app_req_memory
@@ -422,21 +427,22 @@ class EdgeRelEnv(gym.Env):
         # todo: include the number of trajectory
 
         if not is_relocation_done:  # we are staying at the same cluster, let's check why
-            if not self.mecApp.LatencyOK(
-                    self.mecApp.current_MEC):  # we have stayed, however this is because the action space was empty and current MEC was only one possible action ( even it does not meet constraint)
-                self.reward = -10
+            if not self.mecApp.LatencyOK(self.mecApp.current_MEC):  # we have stayed, however this is because the action space was empty and current MEC was only one possible action ( even it does not meet constraint)
+                reward = -10
             else:
-                self.reward = 1
+                reward = 1
         else:
             mec = self.mecApp.current_MEC
             cost = (mec.cpu_utilization + mec.memory_utilization) * mec.placement_cost  # ([1 - 100] + [1 - 100]) * {0.3333; 0.6667; 1} -> max 200, min 0.666
             normalized_cost = cost / 200  # -> min 0.00333, max 1g
-            self.reward = (1 - normalized_cost)
+            reward = (1 - normalized_cost)
+            print("mec cpu util: ", mec.cpu_utilization, "mec mem util: ", mec.memory_utilization)
+
         #
         # if self.current_step >= len(self.trajectory):
         #     self.reward = self.reward / len(self.trajectory)
 
-        return self.reward
+        return reward
 
     def _generateStateMachine(self):
 
@@ -551,7 +557,8 @@ class MecApp:
             return False
 
 
-#
+# #
 # env = EdgeRelEnv("topoconfig.json")
 # env.reset()
+# env.calculateReward2(True)
 # print(env.returnMask())
