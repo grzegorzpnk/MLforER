@@ -274,7 +274,8 @@ class EdgeRelEnv(gym.Env):
         self.mecApp = self._generateMECApp()
         self.mecApp.current_MEC = self._selectStartingNode()
         while self.mecApp.current_MEC is None:
-            print("Cannot find any initial cluster for app. Generating new one")
+            print("Cannot find any initial cluster for app. Generating new initial load")
+            self.trajectory = self._generateTrajectory(5, 25)
             self.mecApp = self._generateMECApp()
             self.mecApp.current_MEC = self._selectStartingNode()
 
@@ -298,12 +299,15 @@ class EdgeRelEnv(gym.Env):
         # assert self.action_space.contains(action)
         action += 1
         self.current_step += 1
+        # print(self.mask)
+        print(self.episodes_counter, " step:", self.current_step, "old mec: ", self.mecApp.current_MEC.id, "action taken(postinc): ", action, "current cell: ", self.mecApp.user_position)
 
         relocation_done = self._relocateApplication(action)
 
         # Calculate the reward based on the new state
         # reward = self._calculate_reward(state)
-        reward = self.calculateReward(relocation_done)
+        reward = self.calculateReward2(relocation_done)
+        print("reward: ", reward)
 
         # Determine whether the episode is finished. Use >= for manual testing
         if self.current_step >= len(self.trajectory):
@@ -402,9 +406,35 @@ class EdgeRelEnv(gym.Env):
             cost = (mec.cpu_utilization + mec.memory_utilization) * mec.placement_cost  # ([1 - 100] + [1 - 100]) * {0.3333; 0.6667; 1} -> max 200, min 0.666
             normalized_cost = cost / 200  # -> min 0.00333, max 1g
             self.reward += (1 - normalized_cost)
+        #
+        # if self.current_step >= len(self.trajectory):
+        #     self.reward = self.reward / len(self.trajectory)
 
-        if self.current_step >= len(self.trajectory):
-            self.reward = self.reward/len(self.trajectory)
+        return self.reward
+
+    def calculateReward2(self, is_relocation_done):
+
+        """
+        reward is reseted only in reset() function at the beggining of episode, next during episode, it is modified in this function ( incremented mostly)
+        :param is_relocation_done: check if we stayed at the same cluster or not
+        :return: reward
+        """
+        # todo: include the number of trajectory
+
+        if not is_relocation_done:  # we are staying at the same cluster, let's check why
+            if not self.mecApp.LatencyOK(
+                    self.mecApp.current_MEC):  # we have stayed, however this is because the action space was empty and current MEC was only one possible action ( even it does not meet constraint)
+                self.reward = -10
+            else:
+                self.reward = 1
+        else:
+            mec = self.mecApp.current_MEC
+            cost = (mec.cpu_utilization + mec.memory_utilization) * mec.placement_cost  # ([1 - 100] + [1 - 100]) * {0.3333; 0.6667; 1} -> max 200, min 0.666
+            normalized_cost = cost / 200  # -> min 0.00333, max 1g
+            self.reward = (1 - normalized_cost)
+        #
+        # if self.current_step >= len(self.trajectory):
+        #     self.reward = self.reward / len(self.trajectory)
 
         return self.reward
 
