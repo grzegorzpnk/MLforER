@@ -1,9 +1,9 @@
 import random
 
-import gymnasium as gym
+# import gymnasium as gym
 import numpy as np
 import sys
-# import gym
+import gym
 import json
 
 sys.modules["gym"] = gym
@@ -48,7 +48,8 @@ class EdgeRelEnv(gym.Env):
 
         # Define the action and observation space
 
-        self.action_space = gym.spaces.discrete.Discrete(n=len(self.mec_nodes))
+        self.action_space = gym.spaces.Discrete(n=len(self.mec_nodes))
+
 
         ################## OBSERVABILITY SPACE ####################################
 
@@ -82,9 +83,9 @@ class EdgeRelEnv(gym.Env):
             {
                 # MEC(for MEC each)    : 1) CPU Capacity 2) CPU Utilization [%] 3) Memory Capacity 4) Memory Utilization [%] 5) Unit Cost
                 # APP(for single app)  : 1) Required mvCPU 2) required Memory 3) Required Latency 4) Current MEC 5) Current RAN
-                "space_MEC": gym.spaces.box.Box(shape=low_bound_mec.shape, dtype=np.int32, low=low_bound_mec,
+                "space_MEC": gym.spaces.Box(shape=low_bound_mec.shape, dtype=np.int32, low=low_bound_mec,
                                             high=high_bound_mec),
-                "space_App": gym.spaces.box.Box(shape=low_bound_app.shape, dtype=np.int32, low=low_bound_app,
+                "space_App": gym.spaces.Box(shape=low_bound_app.shape, dtype=np.int32, low=low_bound_app,
                                             high=high_bound_app)
             }
         )
@@ -295,7 +296,7 @@ class EdgeRelEnv(gym.Env):
         # Check that the action is within the action space
         # todo: check if its necessary
         # assert self.action_space.contains(action)
-
+        action += 1
         self.current_step += 1
 
         relocation_done = self._relocateApplication(action)
@@ -401,6 +402,10 @@ class EdgeRelEnv(gym.Env):
             cost = (mec.cpu_utilization + mec.memory_utilization) * mec.placement_cost  # ([1 - 100] + [1 - 100]) * {0.3333; 0.6667; 1} -> max 200, min 0.666
             normalized_cost = cost / 200  # -> min 0.00333, max 1g
             self.reward += (1 - normalized_cost)
+
+        if self.current_step >= len(self.trajectory):
+            self.reward = self.reward/len(self.trajectory)
+
         return self.reward
 
     def _generateStateMachine(self):
