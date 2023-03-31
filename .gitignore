@@ -276,4 +276,6 @@ poetry.toml
 # LSP config files
 pyrightconfig.json
 
+.gym_examples/logs
+
 # End of https://www.toptal.com/developers/gitignore/api/python,intellij,jupyternotebooks
