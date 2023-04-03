@@ -9,7 +9,7 @@ sys.modules["gym"] = gym
 
 class EdgeRelEnv(gym.Env):
 
-    def __init__(self, configPath):
+    def __init__(self, configPath, _min_trajectory_length, _max_trajectory_length, _initial_load):
 
         # read initial topology config from file
         self.mec_nodes = self._readMECnodesConfig(configPath)
@@ -20,6 +20,9 @@ class EdgeRelEnv(gym.Env):
         self.mecApp = None
         self.state = {}
         self.mobilityStateMachine = self._generateStateMachine()
+        self.min_trajectory_length = _min_trajectory_length
+        self.max_trajectory_length = _max_trajectory_length
+        self.initial_load = _initial_load
 
         self.done = False
         self.episodes_counter = 0
@@ -112,14 +115,9 @@ class EdgeRelEnv(gym.Env):
         return lat_map.get(latValue, 0)
 
     def determineMecID(self, mecName):
-        """
-        Supportive function, since in config file the mecID: "mec3", or "mec12", we need to extract only the ID, e.g. 3 or 12
-        :param mecName: name of mec read from config file
-        :return: ID (int) of mec
-        """
         return int(mecName[3:])
 
-    def _generateTrajectory(self, min_length, max_length):
+    def _generateTrajectory(self):
 
         # generate initial UE position
         start_state = random.randint(1, self.number_of_RANs)
@@ -127,7 +125,7 @@ class EdgeRelEnv(gym.Env):
         current_state = start_state
 
         # generate length of trajectory
-        trajectory_length = random.randint(min_length, max_length)
+        trajectory_length = random.randint(self.min_trajectory_length, self.max_trajectory_length)
         for i in range(trajectory_length):
             next_states = self.mobilityStateMachine.get(str(current_state), [])
             if not next_states:
@@ -187,26 +185,24 @@ class EdgeRelEnv(gym.Env):
 
     def _generateInitialLoadForTopology(self):
 
-        # peak hour [60-90] # mid hour [40-70]  # low hour [10-40]  # radom case [10-90]
+        current_scenario = self.initial_load
 
-        scenarios = ['peak_hours', 'low_hours', 'mid_hours', 'random']
-        current_scenario = random.choice(scenarios)
+        if current_scenario == 'variable_load':
+            scenarios = ['low', 'medium', 'high', 'random']
+            current_scenario = random.choices(scenarios)
 
-        if current_scenario == 'peak_hours':
+        if current_scenario == 'low':
             _min = 60
             _max = 90
-        if current_scenario == 'mid_hours':
+        if current_scenario == 'medium':
             _min = 40
             _max = 70
-        if current_scenario == 'low_hours':
+        if current_scenario == 'high':
             _min = 10
             _max = 40
         if current_scenario == 'random':
             _min = 10
             _max = 90
-
-        _min = 10
-        _max = 40
 
         for mec in self.mec_nodes:
             mec.cpu_utilization = random.randint(_min, _max)
@@ -227,10 +223,12 @@ class EdgeRelEnv(gym.Env):
             randomMec = random.choice(self.mec_nodes)
             if self.mecApp.LatencyOK(randomMec) and self.mecApp.ResourcesOK(randomMec):
                 randomMec.cpu_utilization += int(self.mecApp.app_req_cpu / randomMec.cpu_capacity * 100)
-                randomMec.cpu_available = randomMec.cpu_capacity - (randomMec.cpu_capacity * randomMec.cpu_utilization / 100)
+                randomMec.cpu_available = randomMec.cpu_capacity - (
+                            randomMec.cpu_capacity * randomMec.cpu_utilization / 100)
 
                 randomMec.memory_utilization += int(self.mecApp.app_req_memory / randomMec.memory_capacity * 100)
-                randomMec.memory_available = randomMec.memory_capacity - (randomMec.memory_capacity * randomMec.memory_utilization / 100)
+                randomMec.memory_available = randomMec.memory_capacity - (
+                            randomMec.memory_capacity * randomMec.memory_utilization / 100)
 
                 return randomMec
             if cnt > 1000:
@@ -250,14 +248,14 @@ class EdgeRelEnv(gym.Env):
         self._generateInitialLoadForTopology()
 
         # generate trajectory
-        self.trajectory = self._generateTrajectory(25, 25)
+        self.trajectory = self._generateTrajectory()
 
         # generateApp
         self.mecApp = self._generateMECApp()
         self.mecApp.current_MEC = self._selectStartingNode()
         while self.mecApp.current_MEC is None:
             print("Cannot find any initial cluster for app. Generating new initial load")
-            self.trajectory = self._generateTrajectory(25, 25)
+            self.trajectory = self._generateTrajectory()
             self.mecApp = self._generateMECApp()
             self.mecApp.current_MEC = self._selectStartingNode()
 
@@ -359,23 +357,23 @@ class EdgeRelEnv(gym.Env):
         # take care of CPU
         currentNode.cpu_utilization -= int(self.mecApp.app_req_cpu / currentNode.cpu_capacity * 100)
         currentNode.cpu_available = currentNode.cpu_capacity - (
-                    currentNode.cpu_capacity * currentNode.cpu_utilization / 100)
+                currentNode.cpu_capacity * currentNode.cpu_utilization / 100)
 
         # take care of Memory
         currentNode.memory_utilization -= int(self.mecApp.app_req_memory / currentNode.memory_capacity * 100)
         currentNode.memory_available = currentNode.memory_capacity - (
-                    currentNode.memory_capacity * currentNode.memory_utilization / 100)
+                currentNode.memory_capacity * currentNode.memory_utilization / 100)
 
         # NEW NODE
         # take care of CPU
         targetNode.cpu_utilization += int(self.mecApp.app_req_cpu / targetNode.cpu_capacity * 100)
         targetNode.cpu_available = targetNode.cpu_capacity - (
-                    targetNode.cpu_capacity * targetNode.cpu_utilization / 100)
+                targetNode.cpu_capacity * targetNode.cpu_utilization / 100)
 
         # take care of Memory
         targetNode.memory_utilization += int(self.mecApp.app_req_memory / targetNode.memory_capacity * 100)
         targetNode.memory_available = targetNode.memory_capacity - (
-                    targetNode.memory_capacity * targetNode.memory_utilization / 100)
+                targetNode.memory_capacity * targetNode.memory_utilization / 100)
 
         # Application update
         self.mecApp.current_MEC = targetNode
@@ -419,14 +417,12 @@ class EdgeRelEnv(gym.Env):
             if not self.mecApp.LatencyOK(
                     self.mecApp.current_MEC):  # we have stayed, however this is because the action space was empty and current MEC was only one possible action ( even it does not meet constraint)
                 reward = -10
-                self.penalty_cnt += 1
-                print("penalty: ", self.penalty_cnt)
             else:
                 reward = 1
         else:
             mec = self.mecApp.current_MEC
             cost = (
-                           mec.cpu_utilization + mec.memory_utilization) * mec.placement_cost  # ([1 - 100] + [1 - 100]) * {0.3333; 0.6667; 1} -> max 200, min 0.666
+                               mec.cpu_utilization + mec.memory_utilization) * mec.placement_cost  # ([1 - 100] + [1 - 100]) * {0.3333; 0.6667; 1} -> max 200, min 0.666
             normalized_cost = cost / 200  # -> min 0.00333, max 1g
             reward = (1 - normalized_cost)
             # print("mec cpu util: ", mec.cpu_utilization, "mec mem util: ", mec.memory_utilization)
@@ -560,7 +556,7 @@ class MecApp:
 
 
 # #
-env = EdgeRelEnv("topoconfig.json")
-env.reset()
-env.calculateReward2(True)
-print(env.action_masks())
+# env = EdgeRelEnv("topoconfig.json")
+# env.reset()
+# env.calculateReward2(True)
+# print(env.action_masks())
