@@ -267,34 +267,24 @@ class EdgeRelEnv(gym.Env):
         return self.state
 
     def step(self, action):
-        """
-        # We are assuming that the constraints are already checked by agent, and actions are masked -> here we need to move application only and update the state
-        :param action:  ID of mec done where the application is relocated
-        :param paramWeights: weights of particulary parts of Reward function ( should be declared at agent or env side?)
-        :return:
-        """
 
-        # Check that the action is within the action space
-        # todo: check if its necessary
-        # assert self.action_space.contains(action)
-        action += 1
+        action += 1  # + 1 because gym implements action space as a discrete 0,1,2,.., we need to update till 1,2,3...
         self.current_step += 1
-        # print(self.mask)
-        # print("Ep: ", self.episodes_counter, " step:", self.current_step, "old mec: ", self.mecApp.current_MEC.id,
-        #       "action taken(postinc): ", action, "current cell: ", self.mecApp.user_position, "latency req: ", self.mecApp.app_req_latency)
-        # for mec in self.mec_nodes:
-        #     print("mec: ", mec.id, "cpu: ", mec.cpu_utilization, "memory: ", mec.memory_utilization)
-        # print(self.mask)
 
-        relocation_done = self._relocateApplication(action)
+        reward = self.calculateReward(relocation_done)
 
-        reward = self.calculateReward2(relocation_done)
+        if reward < 0:
+            # since the selected MEC is violating latency do not execute relocation
+            print("Selected cluster is violating constraints. Keep app on the same node")
+        else:
+            relocation_done = self._relocateApplication(action)
+
+        reward = self.calculateReward(relocation_done)
 
         if self.current_step >= len(self.trajectory):
             self.done = True
         else:
             self.mecApp.user_position = self.trajectory[self.current_step]
-            self._calculateMask()
 
         # Update the state of the environment
         self.state = self._get_state()
@@ -302,34 +292,34 @@ class EdgeRelEnv(gym.Env):
         # Return the new state, the reward, and whether the episode is finished
         return self.state, reward, self.done, {}
 
-    def _calculateMask(self):
-        # reset previous mask
-        self.mask.clear()
-        self.mask_latency.clear()
+    # def _calculateMask(self):
+    #     # reset previous mask
+    #     self.mask.clear()
+    #     self.mask_latency.clear()
+    #
+    #     copy_mec_nodes = self.mec_nodes.copy()
+    #     copy_mec_nodes.sort(key=self.sort_by_id)
+    #
+    #     for mec in copy_mec_nodes:
+    #         if self.mecApp.LatencyOK(mec) and self.mecApp.ResourcesOK(mec):
+    #             self.mask.append(True)
+    #         else:
+    #             self.mask.append(False)
+    #
+    #     if all(val == False for val in self.mask):
+    #         print("All falses in mask - modify and True current MEC")
+    #         self.mask.clear()
+    #         for mec in copy_mec_nodes:
+    #             if mec == self.mecApp.current_MEC:
+    #                 self.mask.append(True)
+    #             else:
+    #                 if self.mecApp.LatencyOK(mec) and self.mecApp.ResourcesOK(mec):
+    #                     self.mask.append(True)
+    #                 else:
+    #                     self.mask.append(False)
 
-        copy_mec_nodes = self.mec_nodes.copy()
-        copy_mec_nodes.sort(key=self.sort_by_id)
-
-        for mec in copy_mec_nodes:
-            if self.mecApp.LatencyOK(mec) and self.mecApp.ResourcesOK(mec):
-                self.mask.append(True)
-            else:
-                self.mask.append(False)
-
-        if all(val == False for val in self.mask):
-            print("All falses in mask - modify and True current MEC")
-            self.mask.clear()
-            for mec in copy_mec_nodes:
-                if mec == self.mecApp.current_MEC:
-                    self.mask.append(True)
-                else:
-                    if self.mecApp.LatencyOK(mec) and self.mecApp.ResourcesOK(mec):
-                        self.mask.append(True)
-                    else:
-                        self.mask.append(False)
-
-    def action_masks(self):
-        return list(self.mask)
+    # def action_masks(self):
+    #     return list(self.mask)
 
     def sort_by_id(self, node):
         return int(node.id[3:])
@@ -404,36 +394,6 @@ class EdgeRelEnv(gym.Env):
 
         return self.reward
 
-    def calculateReward2(self, is_relocation_done):
-
-        """
-        reward is reseted only in reset() function at the beggining of episode, next during episode, it is modified in this function ( incremented mostly)
-        :param is_relocation_done: check if we stayed at the same cluster or not
-        :return: reward
-        """
-        # todo: include the number of trajectory
-
-        if not is_relocation_done:  # we are staying at the same cluster, let's check why
-            if not self.mecApp.LatencyOK(
-                    self.mecApp.current_MEC):  # we have stayed, however this is because the action space was empty and current MEC was only one possible action ( even it does not meet constraint)
-                reward = -10
-            else:
-                reward = 1
-        else:
-            mec = self.mecApp.current_MEC
-            cost = (
-                               mec.cpu_utilization + mec.memory_utilization) * mec.placement_cost  # ([1 - 100] + [1 - 100]) * {0.3333; 0.6667; 1} -> max 200, min 0.666
-            normalized_cost = cost / 200  # -> min 0.00333, max 1g
-            reward = (1 - normalized_cost)
-            # print("mec cpu util: ", mec.cpu_utilization, "mec mem util: ", mec.memory_utilization)
-
-        # if reward == -10:
-        #     for mec in self.mec_nodes:
-        #         print("mec: ", mec.id, "cpu: ", mec.cpu_utilization, "memory: ", mec.memory_utilization,
-        #               "latency1: ", mec.latency_array[self.current_step-1], "latency2: ", mec.latency_array[self.mecApp.user_position - 1])
-        #     print(self.mask)
-
-        return reward
 
     def _generateStateMachine(self):
 
