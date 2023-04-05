@@ -111,7 +111,7 @@ class EdgeRelEnv(gym.Env):
         return cost_map.get(placement_cost, 0)
 
     def determineStateofAppLatReq(self, latValue):
-        lat_map = {10: 1, 15: 2, 25: 3}
+        lat_map = {10: 1, 15: 2, 30: 3}
         return lat_map.get(latValue, 0)
 
     def determineMecID(self, mecName):
