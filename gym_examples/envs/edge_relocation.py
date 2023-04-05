@@ -73,7 +73,7 @@ class EdgeRelEnv(gym.Env):
             }
         )
 
-    def _get_state(self):
+    def get_state(self):
 
         space_MEC = np.zeros((len(self.mec_nodes), 5))
 
@@ -259,10 +259,8 @@ class EdgeRelEnv(gym.Env):
             self.mecApp = self._generateMECApp()
             self.mecApp.current_MEC = self._selectStartingNode()
 
-        self.state = self._get_state()
+        self.state = self.get_state()
 
-        # calculate mask for first step
-        self._calculateMask()
 
         return self.state
 
@@ -287,7 +285,7 @@ class EdgeRelEnv(gym.Env):
             self.mecApp.user_position = self.trajectory[self.current_step]
 
         # Update the state of the environment
-        self.state = self._get_state()
+        self.state = self.get_state()
 
         # Return the new state, the reward, and whether the episode is finished
         return self.state, reward, self.done, {}
