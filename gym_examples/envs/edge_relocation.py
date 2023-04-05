@@ -192,14 +192,14 @@ class EdgeRelEnv(gym.Env):
             current_scenario = random.choices(scenarios)
 
         if current_scenario == 'low':
-            _min = 60
-            _max = 90
-        if current_scenario == 'medium':
-            _min = 40
-            _max = 70
-        if current_scenario == 'high':
             _min = 10
             _max = 40
+        if current_scenario == 'medium':
+            _min = 40
+            _max = 60
+        if current_scenario == 'high':
+            _min = 60
+            _max = 80
         if current_scenario == 'random':
             _min = 10
             _max = 90
@@ -397,8 +397,7 @@ class EdgeRelEnv(gym.Env):
                 self.reward += 1
         else:
             mec = self.mecApp.current_MEC
-            cost = (
-                           mec.cpu_utilization + mec.memory_utilization) * mec.placement_cost  # ([1 - 100] + [1 - 100]) * {0.3333; 0.6667; 1} -> max 200, min 0.666
+            cost = (mec.cpu_utilization + mec.memory_utilization) * mec.placement_cost  # ([1 - 100] + [1 - 100]) * {0.3333; 0.6667; 1} -> max 200, min 0.666
             normalized_cost = cost / 200  # -> min 0.00333, max 1g
             self.reward += (1 - normalized_cost)
 
