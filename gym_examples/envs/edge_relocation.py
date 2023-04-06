@@ -380,28 +380,28 @@ class EdgeRelEnv(gym.Env):
 
         return True
 
-    def calculateReward(self, is_relocation_done):
-
-        """
-        reward is reseted only in reset() function at the beggining of episode, next during episode, it is modified in this function ( incremented mostly)
-        :param is_relocation_done: check if we stayed at the same cluster or not
-        :return: reward
-        """
-        # todo: include the number of trajectory
-
-        if not is_relocation_done:  # we are staying at the same cluster, let's check why
-            if not self.mecApp.LatencyOK(
-                    self.mecApp.current_MEC):  # we have stayed, however this is because the action space was empty and current MEC was only one possible action ( even it does not meet constraint)
-                self.reward += -10
-            else:
-                self.reward += 1
-        else:
-            mec = self.mecApp.current_MEC
-            cost = (mec.cpu_utilization + mec.memory_utilization) * mec.placement_cost  # ([1 - 100] + [1 - 100]) * {0.3333; 0.6667; 1} -> max 200, min 0.666
-            normalized_cost = cost / 200  # -> min 0.00333, max 1g
-            self.reward += (1 - normalized_cost)
-
-        return self.reward
+    # def calculateReward(self, is_relocation_done):
+    #
+    #     """
+    #     reward is reseted only in reset() function at the beggining of episode, next during episode, it is modified in this function ( incremented mostly)
+    #     :param is_relocation_done: check if we stayed at the same cluster or not
+    #     :return: reward
+    #     """
+    #     # todo: include the number of trajectory
+    #
+    #     if not is_relocation_done:  # we are staying at the same cluster, let's check why
+    #         if not self.mecApp.LatencyOK(
+    #                 self.mecApp.current_MEC):  # we have stayed, however this is because the action space was empty and current MEC was only one possible action ( even it does not meet constraint)
+    #             self.reward += -10
+    #         else:
+    #             self.reward += 1
+    #     else:
+    #         mec = self.mecApp.current_MEC
+    #         cost = (mec.cpu_utilization + mec.memory_utilization) * mec.placement_cost  # ([1 - 100] + [1 - 100]) * {0.3333; 0.6667; 1} -> max 200, min 0.666
+    #         normalized_cost = cost / 200  # -> min 0.00333, max 1g
+    #         self.reward += (1 - normalized_cost)
+    #
+    #     return self.reward
 
     def calculateReward2(self, is_relocation_done):
 
@@ -539,6 +539,9 @@ class MecApp:
         :return:
         """
 
+            # if considered mec is a current mec for app esources are definitely true, no need to check
+        if mec == self.current_MEC:
+            return True
         if mec.cpu_available < self.app_req_cpu:
             # print("resources NOT OK. available CPU: ", mec.cpu_available, "while requested by app: ", self.app_req_cpu )
             # print("resources NOT OK. available MEM: ", mec.memory_available, "while requested by app: ", self.app_req_memory)
