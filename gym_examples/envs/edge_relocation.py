@@ -142,7 +142,7 @@ class EdgeRelEnv(gym.Env):
         random_req_cpu = random.choice(resources_req)
         random_req_mem = random.choice(resources_req)
         # Define a list of three latency: 10, 15, 25
-        allowed_latencies = [10, 15, 25]
+        allowed_latencies = [10, 15, 30]
         # Randomly select one number from the list
         random_latency = random.choice(allowed_latencies)
 
