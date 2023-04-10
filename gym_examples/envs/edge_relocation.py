@@ -15,7 +15,7 @@ class EdgeRelEnv(gym.Env):
         self.mec_nodes = self._readMECnodesConfig(configPath)
         self.number_of_RANs = len(self.mec_nodes[0].latency_array)
         self.current_step = 0
-        self.reward = 0
+
         self.trajectory = None
         self.mecApp = None
         self.state = {}
@@ -28,8 +28,6 @@ class EdgeRelEnv(gym.Env):
         self.episodes_counter = 0
         self.relocations_done = 0
         self.relocations_skipped = 0
-        self.mask = []
-        self.mask_latency = []
 
         ################## ACTION SPACE ####################################
         self.action_space = gym.spaces.Discrete(n=len(self.mec_nodes))
@@ -224,11 +222,11 @@ class EdgeRelEnv(gym.Env):
             if self.mecApp.LatencyOK(randomMec) and self.mecApp.ResourcesOK(randomMec):
                 randomMec.cpu_utilization += int(self.mecApp.app_req_cpu / randomMec.cpu_capacity * 100)
                 randomMec.cpu_available = randomMec.cpu_capacity - (
-                            randomMec.cpu_capacity * randomMec.cpu_utilization / 100)
+                        randomMec.cpu_capacity * randomMec.cpu_utilization / 100)
 
                 randomMec.memory_utilization += int(self.mecApp.app_req_memory / randomMec.memory_capacity * 100)
                 randomMec.memory_available = randomMec.memory_capacity - (
-                            randomMec.memory_capacity * randomMec.memory_utilization / 100)
+                        randomMec.memory_capacity * randomMec.memory_utilization / 100)
 
                 return randomMec
             if cnt > 1000:
@@ -240,7 +238,7 @@ class EdgeRelEnv(gym.Env):
         self.done = False
         self.current_step = 0
         self.episodes_counter += 1
-        self.reward = 0
+
 
         # generate inputs: inital load, application, trajectory
 
@@ -261,23 +259,37 @@ class EdgeRelEnv(gym.Env):
 
         self.state = self.get_state()
 
-
         return self.state
 
     def step(self, action):
 
-        action += 1  # + 1 because gym implements action space as a discrete 0,1,2,.., we need to update till 1,2,3...
+        action += 1  # + 1 because gym implements action space as a discrete 0,1,2,.., we need to update for MEC ID: 1,2,3...
         self.current_step += 1
 
-        reward = self.calculateReward(relocation_done)
+        # check first if selected MEC is a current MEC
+        currentNode = self._getMecNodeByID(self.mecApp.current_MEC.id)
+        targetNode = self._getMecNodeByID("mec" + str(action))
 
-        if reward < 0:
-            # since the selected MEC is violating latency do not execute relocation
-            print("Selected cluster is violating constraints. Keep app on the same node")
-        else:
-            relocation_done = self._relocateApplication(action)
+        # algorithm
 
-        reward = self.calculateReward(relocation_done)
+        if currentNode == targetNode:
+            if self.mecApp.LatencyOK(targetNode):
+                reward = 1
+            else:
+                reward = -10
+
+        if currentNode != targetNode:
+            if self.mecApp.ResourcesOK(targetNode):
+                if self.mecApp.LatencyOK(targetNode):
+                    self._relocateApplication(currentNode, targetNode)
+                    reward = self.calculateReward()
+                else:
+                    reward = -10
+            else:
+                if self.mecApp.LatencyOK(targetNode):
+                    reward = -10
+                else:
+                    reward = -20
 
         if self.current_step >= len(self.trajectory):
             self.done = True
@@ -290,55 +302,13 @@ class EdgeRelEnv(gym.Env):
         # Return the new state, the reward, and whether the episode is finished
         return self.state, reward, self.done, {}
 
-    # def _calculateMask(self):
-    #     # reset previous mask
-    #     self.mask.clear()
-    #     self.mask_latency.clear()
-    #
-    #     copy_mec_nodes = self.mec_nodes.copy()
-    #     copy_mec_nodes.sort(key=self.sort_by_id)
-    #
-    #     for mec in copy_mec_nodes:
-    #         if self.mecApp.LatencyOK(mec) and self.mecApp.ResourcesOK(mec):
-    #             self.mask.append(True)
-    #         else:
-    #             self.mask.append(False)
-    #
-    #     if all(val == False for val in self.mask):
-    #         print("All falses in mask - modify and True current MEC")
-    #         self.mask.clear()
-    #         for mec in copy_mec_nodes:
-    #             if mec == self.mecApp.current_MEC:
-    #                 self.mask.append(True)
-    #             else:
-    #                 if self.mecApp.LatencyOK(mec) and self.mecApp.ResourcesOK(mec):
-    #                     self.mask.append(True)
-    #                 else:
-    #                     self.mask.append(False)
-
-    # def action_masks(self):
-    #     return list(self.mask)
-
-    def sort_by_id(self, node):
-        return int(node.id[3:])
-
-    def _relocateApplication(self, action):
+    def _relocateApplication(self, currentNode, targetNode ):
         """
         :we are assuming that relocation MUST be finished with success, since the constraints are checked by agents and only allowed actions( latency OK, enough resources) are taken
         :todo: check what is under "action", seems that actions are int within range [0, length(mec_nodes)], but should be : [1 , length(mec_nodes)], maybe some dictionary for action space?
         :param action: currently action means the id of cluster where to relocate
         :return: true if app has been moved, false if app stayed at the same cluster
         """
-        # check first if selected MEC is a current MEC
-        currentNode = self._getMecNodeByID(self.mecApp.current_MEC.id)
-        targetNode = self._getMecNodeByID("mec" + str(action))
-
-        if currentNode == targetNode:
-            # print(self.current_step, "No relocation, since selected cluster is the same as a current")
-            self.relocations_skipped += 1
-            return False
-        else:
-            self.relocations_done += 1
 
         # improved version
         # OLD NODE
@@ -368,30 +338,14 @@ class EdgeRelEnv(gym.Env):
 
         return True
 
-    def calculateReward(self, is_relocation_done):
+    def calculateReward(self):
 
-        """
-        reward is reseted only in reset() function at the beggining of episode, next during episode, it is modified in this function ( incremented mostly)
-        :param is_relocation_done: check if we stayed at the same cluster or not
-        :return: reward
-        """
-        # todo: include the number of trajectory
-
-        if not is_relocation_done:  # we are staying at the same cluster, let's check why
-            if not self.mecApp.LatencyOK(
-                    self.mecApp.current_MEC):  # we have stayed, however this is because the action space was empty and current MEC was only one possible action ( even it does not meet constraint)
-                self.reward += -10
-            else:
-                self.reward += 1
-        else:
             mec = self.mecApp.current_MEC
-            cost = (
-                           mec.cpu_utilization + mec.memory_utilization) * mec.placement_cost  # ([1 - 100] + [1 - 100]) * {0.3333; 0.6667; 1} -> max 200, min 0.666
+            cost = (mec.cpu_utilization + mec.memory_utilization) * mec.placement_cost  # ([1 - 100] + [1 - 100]) * {0.3333; 0.6667; 1} -> max 200, min 0.666
             normalized_cost = cost / 200  # -> min 0.00333, max 1g
-            self.reward += (1 - normalized_cost)
+            reward = 1 - normalized_cost
 
-        return self.reward
-
+            return reward
 
     def _generateStateMachine(self):
 
@@ -497,7 +451,9 @@ class MecApp:
         :param mec:
         :return:
         """
-
+        # if considered mec is a current mec for app esources are definitely true, no need to check
+        if mec == self.current_MEC:
+            return True
         if mec.cpu_available < self.app_req_cpu:
             # print("resources NOT OK. available CPU: ", mec.cpu_available, "while requested by app: ", self.app_req_cpu )
             # print("resources NOT OK. available MEM: ", mec.memory_available, "while requested by app: ", self.app_req_memory)
@@ -511,7 +467,6 @@ class MecApp:
         else:
             # print("resources NOT OK. ")
             return False
-
 
 # #
 # env = EdgeRelEnv("topoconfig.json")
