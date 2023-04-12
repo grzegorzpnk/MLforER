@@ -56,7 +56,7 @@ class EdgeRelEnv(gym.Env):
         high_bound_app = np.ones((1, 5))  # initialize a 1x5 array filled with ones
         high_bound_app[:, 0] = 6  # high bound of required mvCPU # 1:500, 2:600, 3:700... 6:1000
         high_bound_app[:, 1] = 6  # high bound of required Memory #1:500, 2:600, 3:700... 6:1000
-        high_bound_app[:, 2] = 3  # high bound of Required Latency 1:10, 2:15, 3:25
+        high_bound_app[:, 2] = 3  # high bound of Required Latency 1:10, 2:15, 3:30
         high_bound_app[:, 3] = len(self.mec_nodes)  # high bound of CurrentMEC
         high_bound_app[:, 4] = self.number_of_RANs  # high bound of CurrentRAN
 
