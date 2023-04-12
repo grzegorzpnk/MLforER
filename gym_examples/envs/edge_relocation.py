@@ -185,22 +185,27 @@ class EdgeRelEnv(gym.Env):
 
         current_scenario = self.initial_load
 
-        if current_scenario == 'variable_load':
-            scenarios = ['low', 'medium', 'high', 'random']
-            current_scenario = random.choices(scenarios)
+        _min = 0
+        _max = 0
 
-        if current_scenario == 'low':
-            _min = 60
-            _max = 90
-        if current_scenario == 'medium':
-            _min = 40
-            _max = 70
-        if current_scenario == 'high':
+        if current_scenario == "variable_load":
+            scenarios = ["low", "medium", "high", "random"]
+            current_scenario = random.choice(scenarios)
+
+        if current_scenario == "low":
             _min = 10
             _max = 40
-        if current_scenario == 'random':
+        if current_scenario == "medium":
+            _min = 40
+            _max = 60
+        if current_scenario == "high":
+            _min = 60
+            _max = 80
+        if current_scenario == "random":
             _min = 10
             _max = 90
+
+            print("selected min, max: ", _min, _max)
 
         for mec in self.mec_nodes:
             mec.cpu_utilization = random.randint(_min, _max)
@@ -468,8 +473,17 @@ class MecApp:
             # print("resources NOT OK. ")
             return False
 
-# #
-# env = EdgeRelEnv("topoconfig.json")
-# env.reset()
-# env.calculateReward2(True)
-# print(env.action_masks())
+
+#
+# max_trajectory_length = 25
+# min_trajectory_length = 25
+# initial_load = 'variable_load' # low (10-40%), medium(40-60%)), high(60-80%), random (10-80%), variable_load ( different initial load for each episode)
+#
+# # create environment
+#
+# erEnv = EdgeRelEnv("topoconfig.json", min_trajectory_length, max_trajectory_length, initial_load)
+# # #
+# # env = EdgeRelEnv("topoconfig.json")
+# erEnv.reset()
+# # env.calculateReward2(True)
+# # print(env.action_masks())
