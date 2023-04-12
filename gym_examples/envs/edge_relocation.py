@@ -185,24 +185,29 @@ class EdgeRelEnv(gym.Env):
 
     def _generateInitialLoadForTopology(self):
 
-        current_scenario = self.initial_load
+        _min = 0
+        _max = 0
+        # current_scenario = self.initial_load
+        current_scenario = "variable_load"
 
-        if current_scenario == 'variable_load':
-            scenarios = ['low', 'medium', 'high', 'random']
-            current_scenario = random.choices(scenarios)
+        if current_scenario == "variable_load":
+            scenarios = ["low", "medium", "high", "random"]
+            current_scenario = random.choice(scenarios)
 
-        if current_scenario == 'low':
+        if current_scenario == "low":
             _min = 10
             _max = 40
-        if current_scenario == 'medium':
+        elif current_scenario == "medium":
             _min = 40
             _max = 60
-        if current_scenario == 'high':
+        elif current_scenario == "high":
             _min = 60
             _max = 80
-        if current_scenario == 'random':
+        elif current_scenario == "random":
             _min = 10
             _max = 90
+
+        # print("selected load is:", _min, " : ", _max)
 
         for mec in self.mec_nodes:
             mec.cpu_utilization = random.randint(_min, _max)
@@ -224,11 +229,11 @@ class EdgeRelEnv(gym.Env):
             if self.mecApp.LatencyOK(randomMec) and self.mecApp.ResourcesOK(randomMec):
                 randomMec.cpu_utilization += int(self.mecApp.app_req_cpu / randomMec.cpu_capacity * 100)
                 randomMec.cpu_available = randomMec.cpu_capacity - (
-                            randomMec.cpu_capacity * randomMec.cpu_utilization / 100)
+                        randomMec.cpu_capacity * randomMec.cpu_utilization / 100)
 
                 randomMec.memory_utilization += int(self.mecApp.app_req_memory / randomMec.memory_capacity * 100)
                 randomMec.memory_available = randomMec.memory_capacity - (
-                            randomMec.memory_capacity * randomMec.memory_utilization / 100)
+                        randomMec.memory_capacity * randomMec.memory_utilization / 100)
 
                 return randomMec
             if cnt > 1000:
@@ -421,7 +426,7 @@ class EdgeRelEnv(gym.Env):
         else:
             mec = self.mecApp.current_MEC
             cost = (
-                               mec.cpu_utilization + mec.memory_utilization) * mec.placement_cost  # ([1 - 100] + [1 - 100]) * {0.3333; 0.6667; 1} -> max 200, min 0.666
+                           mec.cpu_utilization + mec.memory_utilization) * mec.placement_cost  # ([1 - 100] + [1 - 100]) * {0.3333; 0.6667; 1} -> max 200, min 0.666
             normalized_cost = cost / 200  # -> min 0.00333, max 1g
             reward = (1 - normalized_cost)
             # print("mec cpu util: ", mec.cpu_utilization, "mec mem util: ", mec.memory_utilization)
@@ -539,7 +544,7 @@ class MecApp:
         :return:
         """
 
-            # if considered mec is a current mec for app esources are definitely true, no need to check
+        # if considered mec is a current mec for app esources are definitely true, no need to check
         if mec == self.current_MEC:
             return True
         if mec.cpu_available < self.app_req_cpu:
@@ -556,9 +561,14 @@ class MecApp:
             # print("resources NOT OK. ")
             return False
 
-
-# #
-# env = EdgeRelEnv("topoconfig.json")
-# env.reset()
-# env.calculateReward2(True)
-# print(env.action_masks())
+#
+# max_trajectory_length = 25
+# min_trajectory_length = 25
+# initial_load = "variable_load"  # low (10-40%), medium(40-60%)), high(60-80%), random (10-80%), variable_load ( different initial load for each episode
+# # create environment
+#
+# erEnv = EdgeRelEnv("topoconfig.json", min_trajectory_length, max_trajectory_length, initial_load)
+# # obs = erEnv.reset()
+# erEnv.reset()
+# erEnv.calculateReward2(True)
+# print(erEnv.action_masks())
