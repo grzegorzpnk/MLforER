@@ -183,7 +183,8 @@ class EdgeRelEnv(gym.Env):
 
     def _generateInitialLoadForTopology(self):
 
-        current_scenario = self.initial_load
+        # current_scenario = self.initial_load
+        current_scenario = "variable_load"
 
         _min = 0
         _max = 0
@@ -195,17 +196,17 @@ class EdgeRelEnv(gym.Env):
         if current_scenario == "low":
             _min = 10
             _max = 40
-        if current_scenario == "medium":
+        elif current_scenario == "medium":
             _min = 40
             _max = 60
-        if current_scenario == "high":
+        elif current_scenario == "high":
             _min = 60
             _max = 80
-        if current_scenario == "random":
+        elif current_scenario == "random":
             _min = 10
             _max = 90
 
-            print("selected min, max: ", _min, _max)
+        # print("selected min, max: ", _min, _max)
 
         for mec in self.mec_nodes:
             mec.cpu_utilization = random.randint(_min, _max)
