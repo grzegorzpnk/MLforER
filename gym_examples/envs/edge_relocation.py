@@ -245,7 +245,6 @@ class EdgeRelEnv(gym.Env):
         self.current_step = 0
         self.episodes_counter += 1
 
-
         # generate inputs: inital load, application, trajectory
 
         # generate initial load
@@ -280,9 +279,9 @@ class EdgeRelEnv(gym.Env):
 
         if currentNode == targetNode:
             if self.mecApp.LatencyOK(targetNode):
-                reward = 1
+                reward = 3
             else:
-                reward = -10
+                reward = -30
 
         if currentNode != targetNode:
             if self.mecApp.ResourcesOK(targetNode):
@@ -290,12 +289,12 @@ class EdgeRelEnv(gym.Env):
                     self._relocateApplication(currentNode, targetNode)
                     reward = self.calculateReward()
                 else:
-                    reward = -10
+                    reward = -30
             else:
                 if self.mecApp.LatencyOK(targetNode):
-                    reward = -10
+                    reward = -30
                 else:
-                    reward = -20
+                    reward = -60
 
         if self.current_step >= len(self.trajectory):
             self.done = True
@@ -308,7 +307,7 @@ class EdgeRelEnv(gym.Env):
         # Return the new state, the reward, and whether the episode is finished
         return self.state, reward, self.done, {}
 
-    def _relocateApplication(self, currentNode, targetNode ):
+    def _relocateApplication(self, currentNode, targetNode):
         """
         :we are assuming that relocation MUST be finished with success, since the constraints are checked by agents and only allowed actions( latency OK, enough resources) are taken
         :todo: check what is under "action", seems that actions are int within range [0, length(mec_nodes)], but should be : [1 , length(mec_nodes)], maybe some dictionary for action space?
@@ -346,12 +345,12 @@ class EdgeRelEnv(gym.Env):
 
     def calculateReward(self):
 
-            mec = self.mecApp.current_MEC
-            cost = (mec.cpu_utilization + mec.memory_utilization) * mec.placement_cost  # ([1 - 100] + [1 - 100]) * {0.3333; 0.6667; 1} -> max 200, min 0.666
-            normalized_cost = cost / 200  # -> min 0.00333, max 1g
-            reward = 1 - normalized_cost
+        mec = self.mecApp.current_MEC
+        cost = (mec.cpu_utilization + mec.memory_utilization)  # [0-100] + [0-100]
+        normalized_cost = cost / 200  # [0-1]
+        reward = (1 - normalized_cost) / mec.placement_cost  # inter: 0.333 , regional: 0.666,  city-level: 1
 
-            return reward
+        return reward
 
     def _generateStateMachine(self):
 
@@ -473,7 +472,6 @@ class MecApp:
         else:
             # print("resources NOT OK. ")
             return False
-
 
 #
 # max_trajectory_length = 25
