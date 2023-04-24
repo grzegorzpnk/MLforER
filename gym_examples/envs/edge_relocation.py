@@ -195,10 +195,10 @@ class EdgeRelEnv(gym.Env):
             current_scenario = random.choice(scenarios)
 
         if current_scenario == "low":
-            _min = 10
-            _max = 40
+            _min = 0
+            _max = 30
         elif current_scenario == "medium":
-            _min = 40
+            _min = 30
             _max = 60
         elif current_scenario == "high":
             _min = 60
@@ -410,32 +410,52 @@ class EdgeRelEnv(gym.Env):
 
     def calculateReward2(self, is_relocation_done):
 
-        """
-        reward is reseted only in reset() function at the beggining of episode, next during episode, it is modified in this function ( incremented mostly)
-        :param is_relocation_done: check if we stayed at the same cluster or not
-        :return: reward
-        """
-        # todo: include the number of trajectory
-
         if not is_relocation_done:  # we are staying at the same cluster, let's check why
-            if not self.mecApp.LatencyOK(
-                    self.mecApp.current_MEC):  # we have stayed, however this is because the action space was empty and current MEC was only one possible action ( even it does not meet constraint)
-                reward = -10
+            if not self.mecApp.LatencyOK(self.mecApp.current_MEC):  # we have stayed, however this is because the action space was empty and current MEC was only one possible action ( even it does not meet constraint)
+                reward = -30
             else:
-                reward = 1
+                reward = 3
         else:
             mec = self.mecApp.current_MEC
-            cost = (
-                           mec.cpu_utilization + mec.memory_utilization) * mec.placement_cost  # ([1 - 100] + [1 - 100]) * {0.3333; 0.6667; 1} -> max 200, min 0.666
-            normalized_cost = cost / 200  # -> min 0.00333, max 1g
-            reward = (1 - normalized_cost)
-            # print("mec cpu util: ", mec.cpu_utilization, "mec mem util: ", mec.memory_utilization)
+            cost = (mec.cpu_utilization + mec.memory_utilization)  # [0-100] + [0-100]
+            normalized_cost = cost / 200  # [0-1]
+            reward = (1 - normalized_cost)  / mec.placement_cost # inter: 0.333 , regional: 0.666,  city-level: 1
 
-        # if reward == -10:
-        #     for mec in self.mec_nodes:
-        #         print("mec: ", mec.id, "cpu: ", mec.cpu_utilization, "memory: ", mec.memory_utilization,
-        #               "latency1: ", mec.latency_array[self.current_step-1], "latency2: ", mec.latency_array[self.mecApp.user_position - 1])
-        #     print(self.mask)
+
+################# CASE 1#################################
+
+            # mec = self.mecApp.current_MEC
+            # cost = (mec.cpu_utilization + mec.memory_utilization) * mec.placement_cost   # [0-100] + [0-100]
+            # normalized_cost = cost / 200  # [0-1]
+            # reward = (1 - normalized_cost)  # inter: 0.333 , regional: 0.666,  city-level: 1
+
+
+
+# city-level 10, 10 -> cost = 20*1, n_c = 20/200=0.1, r=0.9
+# inte-lev 10,10 -> cost = 20/3, n_c = 20/600 , r = 0,966667
+
+# city-level 60, 60 -> cost = 120*1, n_c = 120/200=0.6, r=0.4
+# inte-lev 60,60 -> cost = 120/3, n_c = 120/600 , r = 0,8
+
+
+###################CASE 2 ##############################
+
+
+            # mec = self.mecApp.current_MEC
+            # cost = (mec.cpu_utilization + mec.memory_utilization)  # [0-100] + [0-100]
+            # normalized_cost = cost / 200  # [0-1]
+            # reward = (1 - normalized_cost)  / mec.placement_cost # inter: 0.333 , regional: 0.666,  city-level: 1
+
+# city-level 10, 10 -> cost = 20*1, n_c = 20/200=0.1, r=0,9/1=0,9
+# inte-lev 10,10 -> cost = 20, n_c = 20/200=0,9 , r = 0,9/0,333 = 2, 7
+
+# city-level 60, 60 -> cost = 120, n_c = 120/200=0.6, r=0,4/1 = 0,4
+# inte-lev 60,60 -> cost = 120, n_c = 120/200 = 0,6 , r = 0,4/0,33 = 1,21
+
+
+# first idea: inter:[5-7 ] region[3-6] city [0-4]
+# second:  to make placement_cost also dependent on available resources ( in values, not in percentage)
+
 
         return reward
 
