@@ -79,7 +79,8 @@ class EdgeRelEnv(gym.Env):
         for i, mec_node in enumerate(self.mec_nodes):
             space_MEC[i, 0] = self.determineStateOfCapacity(mec_node.cpu_capacity)
             space_MEC[i, 1] = mec_node.cpu_utilization
-            space_MEC[i, 2] = self.determineStateOfCapacity(mec_node.memory_capacity)
+            space_MEC[i, 2] = self.determineSta
+            teOfCapacity(mec_node.memory_capacity)
             space_MEC[i, 3] = mec_node.memory_utilization
             space_MEC[i, 4] = self.determineStateofCost(mec_node.placement_cost)
 
@@ -105,11 +106,14 @@ class EdgeRelEnv(gym.Env):
         return capacity_map.get(capacityValue)
 
     def determineStateofCost(self, placement_cost):
-        cost_map = {0.33333: 1, 0.66667: 2, 1: 3}
+        cost_map = {0.33334: 1, 0.66667: 2, 1: 3}
         return cost_map.get(placement_cost, 0)
 
     def determineStateofAppLatReq(self, latValue):
+        # lat_map = {10: 1, 15: 2, 30: 3}
         lat_map = {10: 1, 15: 2, 30: 3}
+
+
         return lat_map.get(latValue, 0)
 
     def determineMecID(self, mecName):
@@ -139,7 +143,7 @@ class EdgeRelEnv(gym.Env):
         resources_req = [500, 600, 700, 800, 900, 1000]
         random_req_cpu = random.choice(resources_req)
         random_req_mem = random.choice(resources_req)
-        # Define a list of three latency: 10, 15, 25
+        # Define a list of three latency: 10, 15, 30
         allowed_latencies = [10, 15, 30]
         # Randomly select one number from the list
         random_latency = random.choice(allowed_latencies)
@@ -474,15 +478,18 @@ class MecApp:
             return False
 
 #
-# max_trajectory_length = 25
-# min_trajectory_length = 25
-# initial_load = 'variable_load' # low (10-40%), medium(40-60%)), high(60-80%), random (10-80%), variable_load ( different initial load for each episode)
-#
-# # create environment
-#
-# erEnv = EdgeRelEnv("topoconfig.json", min_trajectory_length, max_trajectory_length, initial_load)
-# # #
-# # env = EdgeRelEnv("topoconfig.json")
-# erEnv.reset()
-# # env.calculateReward2(True)
-# # print(env.action_masks())
+max_trajectory_length = 25
+min_trajectory_length = 25
+initial_load = 'variable_load' # low (10-40%), medium(40-60%)), high(60-80%), random (10-80%), variable_load ( different initial load for each episode)
+
+# create environment
+
+erEnv = EdgeRelEnv("topoconfig.json", min_trajectory_length, max_trajectory_length, initial_load)
+# #
+# env = EdgeRelEnv("topoconfig.json")
+erEnv.reset()
+erEnv.step(1)
+erEnv.step(5)
+erEnv.step(10)
+# env.calculateReward2(True)
+# print(env.action_masks())
