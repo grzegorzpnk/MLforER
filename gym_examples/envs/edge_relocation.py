@@ -419,7 +419,7 @@ class EdgeRelEnv(gym.Env):
             mec = self.mecApp.current_MEC
             cost = (mec.cpu_utilization + mec.memory_utilization)  # [0-100] + [0-100]
             normalized_cost = cost / 200  # [0-1]
-            reward = (1 - normalized_cost)  / mec.placement_cost # inter: 0.333 , regional: 0.666,  city-level: 1
+            reward = (1 - normalized_cost) / mec.placement_cost # inter: 0.333 , regional: 0.666,  city-level: 1
 
 
 ################# CASE 1#################################
@@ -574,8 +574,9 @@ class MecApp:
         elif mec.memory_available < self.app_req_memory:
             # print("resources NOT OK. available MEM: ", mec.memory_available, "while requested by app: ", self.app_req_memory )
             return False
-        elif mec.cpu_utilization <= self.tau * 100 and mec.memory_utilization <= self.tau * 100:
-            # print("resources OK. ")
+        elif (mec.cpu_utilization + self.app_req_cpu / mec.cpu_capacity * 100) <= (self.tau * 100) and (
+               mec.memory_utilization + self.app_req_memory / mec.memory_capacity * 100) <= (self.tau * 100):
+        # elif mec.cpu_utilization <= (self.tau * 100) and mec.memory_utilization <= (self.tau * 100):
             return True
         else:
             # print("resources NOT OK. ")
@@ -585,10 +586,10 @@ class MecApp:
 # max_trajectory_length = 25
 # min_trajectory_length = 25
 # initial_load = "variable_load"  # low (10-40%), medium(40-60%)), high(60-80%), random (10-80%), variable_load ( different initial load for each episode
-# # create environment
-#
+# # # create environment
+# #
 # erEnv = EdgeRelEnv("topoconfig.json", min_trajectory_length, max_trajectory_length, initial_load)
-# # obs = erEnv.reset()
+#
 # erEnv.reset()
-# erEnv.calculateReward2(True)
-# print(erEnv.action_masks())
+# for i in 21:
+#     erEnv.step(erEnv.action_space.sample())
