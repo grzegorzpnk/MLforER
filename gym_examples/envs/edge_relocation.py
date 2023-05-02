@@ -397,7 +397,7 @@ class EdgeRelEnv(gym.Env):
             if not self.mecApp.LatencyOK(self.mecApp.current_MEC):  # we have stayed, however this is because the action space was empty and current MEC was only one possible action ( even it does not meet constraint)
                 reward = -30
             else:
-                reward = 100
+                reward = 10
         else:
             mec = self.mecApp.current_MEC
             cost = (mec.cpu_utilization + mec.memory_utilization)  # [0-100] + [0-100]
@@ -518,9 +518,9 @@ class MecApp:
             return False
         elif mec.memory_available < self.app_req_memory:
             return False
-        elif (mec.cpu_utilization + self.app_req_cpu / mec.cpu_capacity * 100) <= (self.tau * 100) and (
-               mec.memory_utilization + self.app_req_memory / mec.memory_capacity * 100) <= (self.tau * 100):
-            # elif mec.cpu_utilization <= self.tau * 100 and mec.memory_utilization <= self.tau * 100:
+        # elif (mec.cpu_utilization + self.app_req_cpu / mec.cpu_capacity * 100) <= (self.tau * 100) and (
+        #        mec.memory_utilization + self.app_req_memory / mec.memory_capacity * 100) <= (self.tau * 100):
+        elif mec.cpu_utilization <= self.tau * 100 and mec.memory_utilization <= self.tau * 100:
             return True
         else:
             return False
