@@ -386,30 +386,10 @@ class EdgeRelEnv(gym.Env):
         # Application update
         self.mecApp.current_MEC = targetNode
 
-        return True
+        if targetNode.memory_utilization > 100 or targetNode.cpu_utilization > 100:
+            print("Value over 100. Mem:", targetNode.memory_utilization, " CPU: ", targetNode.cpu_utilization )
 
-    # def calculateReward(self, is_relocation_done):
-    #
-    #     """
-    #     reward is reseted only in reset() function at the beggining of episode, next during episode, it is modified in this function ( incremented mostly)
-    #     :param is_relocation_done: check if we stayed at the same cluster or not
-    #     :return: reward
-    #     """
-    #     # todo: include the number of trajectory
-    #
-    #     if not is_relocation_done:  # we are staying at the same cluster, let's check why
-    #         if not self.mecApp.LatencyOK(
-    #                 self.mecApp.current_MEC):  # we have stayed, however this is because the action space was empty and current MEC was only one possible action ( even it does not meet constraint)
-    #             self.reward += -10
-    #         else:
-    #             self.reward += 1
-    #     else:
-    #         mec = self.mecApp.current_MEC
-    #         cost = (mec.cpu_utilization + mec.memory_utilization) * mec.placement_cost  # ([1 - 100] + [1 - 100]) * {0.3333; 0.6667; 1} -> max 200, min 0.666
-    #         normalized_cost = cost / 200  # -> min 0.00333, max 1g
-    #         self.reward += (1 - normalized_cost)
-    #
-    #     return self.reward
+        return True
 
     def calculateReward2(self, is_relocation_done):
 
@@ -417,21 +397,12 @@ class EdgeRelEnv(gym.Env):
             if not self.mecApp.LatencyOK(self.mecApp.current_MEC):  # we have stayed, however this is because the action space was empty and current MEC was only one possible action ( even it does not meet constraint)
                 reward = -30
             else:
-                reward = 3
+                reward = 100
         else:
             mec = self.mecApp.current_MEC
             cost = (mec.cpu_utilization + mec.memory_utilization)  # [0-100] + [0-100]
             normalized_cost = cost / 200  # [0-1]
             reward = (1 - normalized_cost) / mec.placement_cost # inter: 0.333 , regional: 0.666,  city-level: 1
-
-
-################# CASE 1#################################
-
-            # mec = self.mecApp.current_MEC
-            # cost = (mec.cpu_utilization + mec.memory_utilization) * mec.placement_cost   # [0-100] + [0-100]
-            # normalized_cost = cost / 200  # [0-1]
-            # reward = (1 - normalized_cost)  # inter: 0.333 , regional: 0.666,  city-level: 1
-
 
         return reward
 
@@ -549,7 +520,7 @@ class MecApp:
             return False
         elif (mec.cpu_utilization + self.app_req_cpu / mec.cpu_capacity * 100) <= (self.tau * 100) and (
                mec.memory_utilization + self.app_req_memory / mec.memory_capacity * 100) <= (self.tau * 100):
-        # elif mec.cpu_utilization <= self.tau * 100 and mec.memory_utilization <= self.tau * 100:
+            # elif mec.cpu_utilization <= self.tau * 100 and mec.memory_utilization <= self.tau * 100:
             return True
         else:
             return False
