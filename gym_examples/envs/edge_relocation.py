@@ -541,7 +541,7 @@ class MecApp:
         """
 
         # if considered mec is a current mec for app esources are definitely true, no need to check
-        if mec.id == self.current_MEC.id:
+        if self.current_MEC is not None and self.current_MEC.id == mec.id:
             return True
         if mec.cpu_available < self.app_req_cpu:
             return False
@@ -549,19 +549,21 @@ class MecApp:
             return False
         elif (mec.cpu_utilization + self.app_req_cpu / mec.cpu_capacity * 100) <= (self.tau * 100) and (
                mec.memory_utilization + self.app_req_memory / mec.memory_capacity * 100) <= (self.tau * 100):
-        # elif mec.cpu_utilization <= (self.tau * 100) and mec.memory_utilization <= (self.tau * 100):
+        # elif mec.cpu_utilization <= self.tau * 100 and mec.memory_utilization <= self.tau * 100:
             return True
         else:
             return False
 
-
-max_trajectory_length = 25
-min_trajectory_length = 25
-initial_load = "variable_load"  # low (10-40%), medium(40-60%)), high(60-80%), random (10-80%), variable_load ( different initial load for each episode
-# # create environment
 #
-erEnv = EdgeRelEnv("topoconfig.json", min_trajectory_length, max_trajectory_length, initial_load)
-
-erEnv.reset()
-for i in 21:
-    erEnv.step(erEnv.action_space.sample())
+# max_trajectory_length = 25
+# min_trajectory_length = 25
+# initial_load = "variable_load"  # low (10-40%), medium(40-60%)), high(60-80%), random (10-80%), variable_load ( different initial load for each episode
+# # # create environment
+# #
+# erEnv = EdgeRelEnv("topoconfig.json", min_trajectory_length, max_trajectory_length, initial_load)
+#
+# erEnv.reset()
+# erEnv.step(erEnv.action_space.sample())
+# erEnv.step(erEnv.action_space.sample())
+# erEnv.step(erEnv.action_space.sample())
+# erEnv.step(erEnv.action_space.sample())
