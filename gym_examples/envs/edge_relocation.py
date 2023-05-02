@@ -260,9 +260,12 @@ class EdgeRelEnv(gym.Env):
         self.mecApp.current_MEC = self._selectStartingNode()
         while self.mecApp.current_MEC is None:
             print("Cannot find any initial cluster for app. Generating new initial load")
-            self.trajectory = self._generateTrajectory()
+            self._generateInitialLoadForTopology()
             self.mecApp = self._generateMECApp()
             self.mecApp.current_MEC = self._selectStartingNode()
+            # self.trajectory = self._generateTrajectory()
+            # self.mecApp = self._generateMECApp()
+            # self.mecApp.current_MEC = self._selectStartingNode()
 
         self.state = self._get_state()
 
