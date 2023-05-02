@@ -433,33 +433,6 @@ class EdgeRelEnv(gym.Env):
             # reward = (1 - normalized_cost)  # inter: 0.333 , regional: 0.666,  city-level: 1
 
 
-
-# city-level 10, 10 -> cost = 20*1, n_c = 20/200=0.1, r=0.9
-# inte-lev 10,10 -> cost = 20/3, n_c = 20/600 , r = 0,966667
-
-# city-level 60, 60 -> cost = 120*1, n_c = 120/200=0.6, r=0.4
-# inte-lev 60,60 -> cost = 120/3, n_c = 120/600 , r = 0,8
-
-
-###################CASE 2 ##############################
-
-
-            # mec = self.mecApp.current_MEC
-            # cost = (mec.cpu_utilization + mec.memory_utilization)  # [0-100] + [0-100]
-            # normalized_cost = cost / 200  # [0-1]
-            # reward = (1 - normalized_cost)  / mec.placement_cost # inter: 0.333 , regional: 0.666,  city-level: 1
-
-# city-level 10, 10 -> cost = 20*1, n_c = 20/200=0.1, r=0,9/1=0,9
-# inte-lev 10,10 -> cost = 20, n_c = 20/200=0,9 , r = 0,9/0,333 = 2, 7
-
-# city-level 60, 60 -> cost = 120, n_c = 120/200=0.6, r=0,4/1 = 0,4
-# inte-lev 60,60 -> cost = 120, n_c = 120/200 = 0,6 , r = 0,4/0,33 = 1,21
-
-
-# first idea: inter:[5-7 ] region[3-6] city [0-4]
-# second:  to make placement_cost also dependent on available resources ( in values, not in percentage)
-
-
         return reward
 
     def _generateStateMachine(self):
@@ -568,31 +541,27 @@ class MecApp:
         """
 
         # if considered mec is a current mec for app esources are definitely true, no need to check
-        if mec == self.current_MEC:
+        if mec.id == self.current_MEC.id:
             return True
         if mec.cpu_available < self.app_req_cpu:
-            # print("resources NOT OK. available CPU: ", mec.cpu_available, "while requested by app: ", self.app_req_cpu )
-            # print("resources NOT OK. available MEM: ", mec.memory_available, "while requested by app: ", self.app_req_memory)
             return False
         elif mec.memory_available < self.app_req_memory:
-            # print("resources NOT OK. available MEM: ", mec.memory_available, "while requested by app: ", self.app_req_memory )
             return False
         elif (mec.cpu_utilization + self.app_req_cpu / mec.cpu_capacity * 100) <= (self.tau * 100) and (
                mec.memory_utilization + self.app_req_memory / mec.memory_capacity * 100) <= (self.tau * 100):
         # elif mec.cpu_utilization <= (self.tau * 100) and mec.memory_utilization <= (self.tau * 100):
             return True
         else:
-            # print("resources NOT OK. ")
             return False
 
+
+max_trajectory_length = 25
+min_trajectory_length = 25
+initial_load = "variable_load"  # low (10-40%), medium(40-60%)), high(60-80%), random (10-80%), variable_load ( different initial load for each episode
+# # create environment
 #
-# max_trajectory_length = 25
-# min_trajectory_length = 25
-# initial_load = "variable_load"  # low (10-40%), medium(40-60%)), high(60-80%), random (10-80%), variable_load ( different initial load for each episode
-# # # create environment
-# #
-# erEnv = EdgeRelEnv("topoconfig.json", min_trajectory_length, max_trajectory_length, initial_load)
-#
-# erEnv.reset()
-# for i in 21:
-#     erEnv.step(erEnv.action_space.sample())
+erEnv = EdgeRelEnv("topoconfig.json", min_trajectory_length, max_trajectory_length, initial_load)
+
+erEnv.reset()
+for i in 21:
+    erEnv.step(erEnv.action_space.sample())
