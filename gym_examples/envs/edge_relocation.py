@@ -404,7 +404,23 @@ class EdgeRelEnv(gym.Env):
             normalized_cost = cost / 200  # [0-1]
             reward = (1 - normalized_cost) / mec.placement_cost # inter: 0.333 , regional: 0.666,  city-level: 1
 
+        # if mec == self.mecApp.current_MEC:  # we are staying at the same cluster, let's check why
+        #     if self.mecApp.LatencyOK(self.mecApp.current_MEC):  # we have stayed, however this is because the action space was empty and current MEC was only one possible action ( even it does not meet constraint)
+        #         reward = 1
+        #     else:
+        #         reward = -10
+        # else:
+        #     mec = self.mecApp.current_MEC
+        #     cost = (mec.cpu_utilization + mec.memory_utilization)  # [0-100] + [0-100]
+        #     normalized_cost = cost / 200  # [0-1]
+        #     reward = (1 - normalized_cost) / mec.placement_cost # inter: 0.333 , regional: 0.666,  city-level: 1
+
+
+
         return reward
+
+
+
 
     def _generateStateMachine(self):
 
