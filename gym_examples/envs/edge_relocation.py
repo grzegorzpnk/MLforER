@@ -56,8 +56,8 @@ class EdgeRelEnv(gym.Env):
         # 1) Required mvCPU 2) required Memory 3) Required Latency 4) Current MEC 5) Current RAN
         low_bound_app = np.ones((1, 5))  # initialize a 1x5 array filled with ones
         high_bound_app = np.ones((1, 5))  # initialize a 1x5 array filled with ones
-        high_bound_app[:, 0] = 6  # high bound of required mvCPU # 1:500, 2:600, 3:700... 6:1000
-        high_bound_app[:, 1] = 6  # high bound of required Memory #1:500, 2:600, 3:700... 6:1000
+        high_bound_app[:, 0] = 500  # high bound of required mvCPU # 1:500, 2:600, 3:700... 6:1000
+        high_bound_app[:, 1] = 500  # high bound of required Memory #1:500, 2:600, 3:700... 6:1000
         high_bound_app[:, 2] = 3  # high bound of Required Latency 1:10, 2:15, 3:25
         high_bound_app[:, 3] = len(self.mec_nodes)  # high bound of CurrentMEC
         high_bound_app[:, 4] = self.number_of_RANs  # high bound of CurrentRAN
@@ -77,6 +77,8 @@ class EdgeRelEnv(gym.Env):
 
         space_MEC = np.zeros((len(self.mec_nodes), 5))
 
+
+
         # MEC  : 0) CPU Capacity 1) CPU Utilization [%] 2) Memory Capacity 3) Memory Utilization [%] 4) Unit Cost
         for i, mec_node in enumerate(self.mec_nodes):
             space_MEC[i, 0] = self.determineStateOfCapacity(mec_node.cpu_capacity)
@@ -84,11 +86,14 @@ class EdgeRelEnv(gym.Env):
             space_MEC[i, 2] = self.determineStateOfCapacity(mec_node.memory_capacity)
             space_MEC[i, 3] = mec_node.memory_utilization
             space_MEC[i, 4] = self.determineStateofCost(mec_node.placement_cost)
+            print("GET STATE, ID: ", mec_node.id)
 
         # APP  : [0,1] Required mvCPU  [0,2] required Memory [0,3] Required Latency [0,4] Current MEC [0,5] Current RAN
         space_App = np.ones((1, 5))
-        space_App[0, 0] = self.determineReqRes(self.mecApp.app_req_cpu)
-        space_App[0, 1] = self.determineReqRes(self.mecApp.app_req_memory)
+        #space_App[0, 0] = self.determineReqRes(self.mecApp.app_req_cpu)
+        #space_App[0, 1] = self.determineReqRes(self.mecApp.app_req_memory)
+        space_App[0, 0] = self.mecApp.app_req_cpu - 500
+        space_App[0, 1] = self.mecApp.app_req_memory - 500
         space_App[0, 2] = self.determineStateofAppLatReq(self.mecApp.app_req_latency)
         space_App[0, 3] = self.determineMecID(self.mecApp.current_MEC.id)
         space_App[0, 4] = self.mecApp.user_position
@@ -138,9 +143,12 @@ class EdgeRelEnv(gym.Env):
     def _generateMECApp(self):
 
         # Generate a value for required resources among given:
-        resources_req = [500, 600, 700, 800, 900, 1000]
-        random_req_cpu = random.choice(resources_req)
-        random_req_mem = random.choice(resources_req)
+        # resources_req = [500, 600, 700, 800, 900, 1000]
+        # random_req_cpu = random.choice(resources_req)
+        # random_req_mem = random.choice(resources_req)
+        # resources_req = random.randint(500, 1000)
+        random_req_cpu = random.randint(501, 1000)
+        random_req_mem = random.randint(501, 1000)
         # Define a list of three latency: 10, 15, 25
         allowed_latencies = [10, 15, 30]
         # Randomly select one number from the list
@@ -325,7 +333,7 @@ class EdgeRelEnv(gym.Env):
                 self.mask.append(False)
 
         if all(val == False for val in self.mask):
-            print("All falses in mask - modify and True current MEC")
+            print("All falses in mask - modify and make True current MEC")
             self.mask.clear()
             for mec in copy_mec_nodes:
                 if mec == self.mecApp.current_MEC:
