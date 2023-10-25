@@ -13,7 +13,6 @@ class EdgeRelEnv(gym.Env):
 
         # read initial topology config from file
         self.cnt = None
-        self.cummulativeReward = None
         self.mec_nodes = self._readMECnodesConfig(configPath)
         self.number_of_RANs = len(self.mec_nodes[0].latency_array)
         self.current_step = 0
@@ -56,8 +55,8 @@ class EdgeRelEnv(gym.Env):
         # 1) Required mvCPU 2) required Memory 3) Required Latency 4) Current MEC 5) Current RAN
         low_bound_app = np.ones((1, 5))  # initialize a 1x5 array filled with ones
         high_bound_app = np.ones((1, 5))  # initialize a 1x5 array filled with ones
-        high_bound_app[:, 0] = 6  # high bound of required mvCPU # 1:500, 2:600, 3:700... 6:1000
-        high_bound_app[:, 1] = 6  # high bound of required Memory #1:500, 2:600, 3:700... 6:1000
+        high_bound_app[:, 0] = 500  # high bound of required mvCPU # 1:500, 2:600, 3:700... 6:1000
+        high_bound_app[:, 1] = 500  # high bound of required Memory #1:500, 2:600, 3:700... 6:1000
         high_bound_app[:, 2] = 3  # high bound of Required Latency 1:10, 2:15, 3:30
         high_bound_app[:, 3] = len(self.mec_nodes)  # high bound of CurrentMEC
         high_bound_app[:, 4] = self.number_of_RANs  # high bound of CurrentRAN
@@ -99,8 +98,9 @@ class EdgeRelEnv(gym.Env):
         return self.state
 
     def determineReqRes(self, reqRes):
-        res_map = {500: 1, 600: 2, 700: 3, 800: 4, 900: 5, 1000: 6}
-        return res_map.get(reqRes, 0)
+        return reqRes - 500
+        # res_map = {500: 1, 600: 2, 700: 3, 800: 4, 900: 5, 1000: 6}
+        # return res_map.get(reqRes, 0)
 
     def determineStateOfCapacity(self, capacityValue):
         capacity_map = {4000: 1, 8000: 2, 12000: 3}
@@ -113,7 +113,6 @@ class EdgeRelEnv(gym.Env):
     def determineStateofAppLatReq(self, latValue):
         # lat_map = {10: 1, 15: 2, 30: 3}
         lat_map = {10: 1, 15: 2, 30: 3}
-
 
         return lat_map.get(latValue, 0)
 
@@ -141,9 +140,9 @@ class EdgeRelEnv(gym.Env):
     def _generateMECApp(self):
 
         # Generate a value for required resources among given:
-        resources_req = [500, 600, 700, 800, 900, 1000]
-        random_req_cpu = random.choice(resources_req)
-        random_req_mem = random.choice(resources_req)
+        #resources_req = [500, 600, 700, 800, 900, 1000]
+        random_req_cpu = random.randint(501, 1000)
+        random_req_mem = random.randint(501, 1000)
         # Define a list of three latency: 10, 15, 30
         allowed_latencies = [10, 15, 30]
         # Randomly select one number from the list
@@ -195,7 +194,7 @@ class EdgeRelEnv(gym.Env):
         _max = 0
 
         if current_scenario == "variable_load":
-            scenarios = ["low", "medium", "high", "random"]
+            scenarios = ["low", "medium", "high", "random", "additional"]
             current_scenario = random.choice(scenarios)
 
         if current_scenario == "low":
@@ -206,6 +205,9 @@ class EdgeRelEnv(gym.Env):
             _max = 60
         elif current_scenario == "high":
             _min = 60
+            _max = 80
+        elif current_scenario == "additional":
+            _min = 40
             _max = 80
         elif current_scenario == "random":
             _min = 10
@@ -247,10 +249,9 @@ class EdgeRelEnv(gym.Env):
     def reset(self):
 
         self.done = False
-        self.current_step = 0
+        self.current_step = 1
         self.episodes_counter += 1
-        self.cummulativeReward = 0
-        self.cnt = [0] * 6
+
 
         # generate inputs: inital load, application, trajectory
 
@@ -270,6 +271,10 @@ class EdgeRelEnv(gym.Env):
             self.mecApp.current_MEC = self._selectStartingNode()
 
         print("app latency: ", self.mecApp.app_req_latency)
+
+        #new command here to test
+        self.mecApp.user_position = self.trajectory[self.current_step]
+
         self.state = self.get_state()
 
         return self.state
@@ -290,51 +295,24 @@ class EdgeRelEnv(gym.Env):
 
         if currentNode == targetNode:
             if self.mecApp.LatencyOK(targetNode):
-                reward = 3
-                self.cummulativeReward += reward
-                print("R: ",reward, " :NOT relocated, as selected the same cluster and its OK")
-                self.cnt[0] += 1
+                reward = 1.5
             else:
-                reward = -30
-                self.cummulativeReward += reward
-                print("R: ",reward, " : NOT relocated, as selected the same cluster however latency was too big")
-                self.cnt[1] += 1
-
+                reward = -3
         if currentNode != targetNode:
             if self.mecApp.ResourcesOK(targetNode):
                 if self.mecApp.LatencyOK(targetNode):
                     self._relocateApplication(currentNode, targetNode)
                     reward = self.calculateReward()
-                    self.cummulativeReward += reward
-                    print("R: ",reward, " : relocated, as selected cluster its OK")
-                    self.cnt[2] += 1
                 else:
                     reward = -30
-                    self.cummulativeReward += reward
-                    print("R: ",reward, " : NOT relocated, as selected the cluster with good Resources, but bad latency")
-                    self.cnt[3] += 1
             else:
                 if self.mecApp.LatencyOK(targetNode):
                     reward = -30
-                    self.cummulativeReward += reward
-                    print("R: ", reward, " : NOT relocated, as selected the cluster with bad resources, but good latency")
-                    self.cnt[4] += 1
                 else:
                     reward = -60
-                    self.cummulativeReward += reward
-                    print("R: ", reward, " : NOT relocated, bad latency and bad resources")
-                    self.cnt[5] += 1
 
         if self.current_step >= len(self.trajectory):
             self.done = True
-            print("Cummulative reward: ", self.cummulativeReward)
-            print("Actions : \n",
-                  self.cnt[0], ": NOT relocated, as selected the same cluster and its OK\n",
-                  self.cnt[1], ": NOT relocated, as selected the same cluster however latency was too big\n",
-                  self.cnt[2], ": relocated, as selected cluster its OK\n",
-                  self.cnt[3], ": NOT relocated, as selected the cluster with good Resources, but bad latency\n",
-                  self.cnt[4], ": NOT relocated, as selected the cluster with bad resources, but good latency\n",
-                  self.cnt[5], ": NOT relocated, bad latency and bad resources\n")
         else:
             self.mecApp.user_position = self.trajectory[self.current_step]
 
