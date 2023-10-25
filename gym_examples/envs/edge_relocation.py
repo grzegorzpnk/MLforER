@@ -77,8 +77,6 @@ class EdgeRelEnv(gym.Env):
 
         space_MEC = np.zeros((len(self.mec_nodes), 5))
 
-
-
         # MEC  : 0) CPU Capacity 1) CPU Utilization [%] 2) Memory Capacity 3) Memory Utilization [%] 4) Unit Cost
         for i, mec_node in enumerate(self.mec_nodes):
             space_MEC[i, 0] = self.determineStateOfCapacity(mec_node.cpu_capacity)
@@ -86,7 +84,7 @@ class EdgeRelEnv(gym.Env):
             space_MEC[i, 2] = self.determineStateOfCapacity(mec_node.memory_capacity)
             space_MEC[i, 3] = mec_node.memory_utilization
             space_MEC[i, 4] = self.determineStateofCost(mec_node.placement_cost)
-            print("GET STATE, ID: ", mec_node.id)
+           # print("GET STATE, ID: ", mec_node.id)
 
         # APP  : [0,1] Required mvCPU  [0,2] required Memory [0,3] Required Latency [0,4] Current MEC [0,5] Current RAN
         space_App = np.ones((1, 5))
@@ -137,6 +135,7 @@ class EdgeRelEnv(gym.Env):
                 break
             current_state = random.choice(next_states)
             trajectory.append(current_state)
+
 
         return trajectory
 
@@ -243,15 +242,16 @@ class EdgeRelEnv(gym.Env):
                 randomMec.memory_available = randomMec.memory_capacity - (
                         randomMec.memory_capacity * randomMec.memory_utilization / 100)
 
+                print("Initial MEC:", randomMec.id)
                 return randomMec
             if cnt > 1000:
                 return None
             cnt += 1
 
     def reset(self):
-
+        print("new episode")
         self.done = False
-        self.current_step = 0
+        self.current_step = 1
         self.episodes_counter += 1
         self.reward = 0
 
@@ -262,6 +262,7 @@ class EdgeRelEnv(gym.Env):
 
         # generate trajectory
         self.trajectory = self._generateTrajectory()
+        print("Trajectory: ", self.trajectory)
 
         # generateApp
         self.mecApp = self._generateMECApp()
@@ -275,8 +276,9 @@ class EdgeRelEnv(gym.Env):
             # self.mecApp = self._generateMECApp()
             # self.mecApp.current_MEC = self._selectStartingNode()
 
+        self.mecApp.user_position = self.trajectory[self.current_step]
+        print("Moved to cell: ", self.trajectory[self.current_step])
         self.state = self._get_state()
-
         # calculate mask for first step
         self._calculateMask()
 
@@ -294,6 +296,7 @@ class EdgeRelEnv(gym.Env):
         # todo: check if its necessary
         # assert self.action_space.contains(action)
         action += 1
+        print("Selected MEC: ", action)
         self.current_step += 1
         # print(self.mask)
         # print("Ep: ", self.episodes_counter, " step:", self.current_step, "old mec: ", self.mecApp.current_MEC.id,
@@ -310,6 +313,7 @@ class EdgeRelEnv(gym.Env):
             self.done = True
         else:
             self.mecApp.user_position = self.trajectory[self.current_step]
+            print("Moved to cell: ", self.trajectory[self.current_step])
             self._calculateMask()
 
         # Update the state of the environment
@@ -331,6 +335,8 @@ class EdgeRelEnv(gym.Env):
                 self.mask.append(True)
             else:
                 self.mask.append(False)
+                if self.mecApp.current_MEC == mec:
+                    print("Current MEC has been masked. It violates constraint")
 
         if all(val == False for val in self.mask):
             print("All falses in mask - modify and make True current MEC")
@@ -403,9 +409,10 @@ class EdgeRelEnv(gym.Env):
 
         if not is_relocation_done:  # we are staying at the same cluster, let's check why
             if not self.mecApp.LatencyOK(self.mecApp.current_MEC):  # we have stayed, however this is because the action space was empty and current MEC was only one possible action ( even it does not meet constraint)
-                reward = -30
+                reward = 0
             else:
-                reward = 10
+                #Not relocated due to the same host has been selected as Optimal
+                reward = 3
         else:
             mec = self.mecApp.current_MEC
             cost = (mec.cpu_utilization + mec.memory_utilization)  # [0-100] + [0-100]
