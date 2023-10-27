@@ -240,14 +240,7 @@ class EdgeRelEnv(gym.Env):
         while True:
             randomMec = random.choice(self.mec_nodes)
             if self.mecApp.LatencyOK(randomMec) and self.mecApp.ResourcesOK(randomMec):
-                randomMec.cpu_utilization += int(self.mecApp.app_req_cpu / randomMec.cpu_capacity * 100)
-                randomMec.cpu_available = randomMec.cpu_capacity - (
-                        randomMec.cpu_capacity * randomMec.cpu_utilization / 100)
-
-                randomMec.memory_utilization += int(self.mecApp.app_req_memory / randomMec.memory_capacity * 100)
-                randomMec.memory_available = randomMec.memory_capacity - (
-                        randomMec.memory_capacity * randomMec.memory_utilization / 100)
-
+                self.instantiateApp(randomMec)
                 print("Initial MEC:  ", randomMec.id)
                 return randomMec
             if cnt > 1000:
@@ -267,8 +260,6 @@ class EdgeRelEnv(gym.Env):
         print("\n")
         print(self.episodes_counter, "New episode")
 
-        # generate inputs: inital load, application, trajectory
-
         # generate initial load
         self._generateInitialLoadForTopology()
 
@@ -284,9 +275,6 @@ class EdgeRelEnv(gym.Env):
             self.mecApp = self._generateMECApp()
             self.mecApp.current_MEC = self._selectStartingNode()
 
-        # print("app latency: ", self.mecApp.app_req_latency)
-
-        # new command here to test
         self.mecApp.user_position = self.trajectory[self.current_step]
         print("Moved towards cell: ", self.trajectory[self.current_step])
 
@@ -306,8 +294,8 @@ class EdgeRelEnv(gym.Env):
         # print(self.current_step,". Current node:", currentNode.id, " Cpu util: ", currentNode.cpu_utilization, "Latency: ", currentNode.latency_array[self.mecApp.user_position - 1],
         #       ", Selected node: ",targetNode.id , " Cpu util: ", targetNode.cpu_utilization, "Latency: ", targetNode.latency_array[self.mecApp.user_position - 1])
 
-        resourceCPUPenalty = max(0, self.mecApp.app_req_cpu - targetNode.cpu_available) / self.mecApp.app_req_cpu
-        resourceMEMPenalty = max(0, self.mecApp.app_req_memory - targetNode.memory_available) / 500
+        # resourceCPUPenalty = max(0, self.mecApp.app_req_cpu - targetNode.cpu_available) / self.mecApp.app_req_cpu
+        # resourceMEMPenalty = max(0, self.mecApp.app_req_memory - targetNode.memory_available) / 500
         # latencyPenalty = max(0, targetNode.latency_array[self.mecApp.user_position-1]-self.mecApp.app_req_latency)/20
         # Penalty = latencyPenalty+resourceMEMPenalty+resourceCPUPenalty
 
