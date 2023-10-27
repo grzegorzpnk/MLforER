@@ -13,6 +13,7 @@ class EdgeRelEnv(gym.Env):
 
         # read initial topology config from file
         self.cnt = None
+        self.reward_episode = 0
         self.mec_nodes = self._readMECnodesConfig(configPath)
         self.number_of_RANs = len(self.mec_nodes[0].latency_array)
         self.current_step = 0
@@ -140,7 +141,7 @@ class EdgeRelEnv(gym.Env):
     def _generateMECApp(self):
 
         # Generate a value for required resources among given:
-        #resources_req = [500, 600, 700, 800, 900, 1000]
+        # resources_req = [500, 600, 700, 800, 900, 1000]
         random_req_cpu = random.randint(501, 1000)
         random_req_mem = random.randint(501, 1000)
         # Define a list of three latency: 10, 15, 30
@@ -214,19 +215,25 @@ class EdgeRelEnv(gym.Env):
             _max = 90
 
         # print("selected min, max: ", _min, _max)
-
+        print("Initial load:")
         for mec in self.mec_nodes:
             mec.cpu_utilization = random.randint(_min, _max)
-            mec.cpu_available = int(mec.cpu_capacity - mec.cpu_capacity * mec.cpu_utilization / 100)
+            mec.cpu_used = int(mec.cpu_capacity * mec.cpu_utilization / 100)
+            mec.cpu_available = int(mec.cpu_capacity - mec.cpu_used)
             if current_scenario == 'random':
                 # this if refers only to a case where random scenario were selected.
                 # I wanted to avoid situation, where cpu utilization is 10 % and mem util is 90 %,
                 # so I decided to put the same utilization value for both is such a case
                 mec.memory_utilization = mec.cpu_utilization
-                mec.memory_available = int(mec.memory_capacity - mec.memory_capacity * mec.memory_utilization / 100)
+                mec.memory_used = int(mec.memory_capacity * mec.memory_utilization / 100)
+                mec.memory_available = int(mec.memory_capacity - mec.memory_used)
             else:
                 mec.memory_utilization = random.randint(_min, _max)
-                mec.memory_available = int(mec.memory_capacity - mec.memory_capacity * mec.memory_utilization / 100)
+                mec.memory_used = int(mec.memory_capacity * mec.memory_utilization / 100)
+                mec.memory_available = int(mec.memory_capacity - mec.memory_used)
+            print(mec.id, ". CPU  Util:", mec.cpu_utilization, "CPU available: ", mec.cpu_available, "CPU Used: ",
+                  mec.cpu_used, ". MEM  Util:", mec.memory_utilization, "MEM available: ", mec.memory_available,
+                  "MEM Used: ", mec.memory_used)
 
     def _selectStartingNode(self):
         cnt = 0
@@ -241,6 +248,7 @@ class EdgeRelEnv(gym.Env):
                 randomMec.memory_available = randomMec.memory_capacity - (
                         randomMec.memory_capacity * randomMec.memory_utilization / 100)
 
+                print("Initial MEC:  ", randomMec.id)
                 return randomMec
             if cnt > 1000:
                 return None
@@ -248,10 +256,16 @@ class EdgeRelEnv(gym.Env):
 
     def reset(self):
 
+        # summarize what was achieved in previouse episode
+        print("Cummulate reward:", self.reward_episode)
+
+        # let's recreate all environement
         self.done = False
+        self.reward_episode = 0
         self.current_step = 1
         self.episodes_counter += 1
-
+        print("\n")
+        print(self.episodes_counter, "New episode")
 
         # generate inputs: inital load, application, trajectory
 
@@ -270,10 +284,11 @@ class EdgeRelEnv(gym.Env):
             self.mecApp = self._generateMECApp()
             self.mecApp.current_MEC = self._selectStartingNode()
 
-        print("app latency: ", self.mecApp.app_req_latency)
+        # print("app latency: ", self.mecApp.app_req_latency)
 
-        #new command here to test
+        # new command here to test
         self.mecApp.user_position = self.trajectory[self.current_step]
+        print("Moved towards cell: ", self.trajectory[self.current_step])
 
         self.state = self.get_state()
 
@@ -288,75 +303,95 @@ class EdgeRelEnv(gym.Env):
         currentNode = self._getMecNodeByID(self.mecApp.current_MEC.id)
         targetNode = self._getMecNodeByID("mec" + str(action))
 
-        print(self.current_step,". Current node:", currentNode.id, " Cpu util: ", currentNode.cpu_utilization, "Latency: ", currentNode.latency_array[self.mecApp.user_position - 1],
-              ", Selected node: ",targetNode.id , " Cpu util: ", targetNode.cpu_utilization, "Latency: ", targetNode.latency_array[self.mecApp.user_position - 1])
+        # print(self.current_step,". Current node:", currentNode.id, " Cpu util: ", currentNode.cpu_utilization, "Latency: ", currentNode.latency_array[self.mecApp.user_position - 1],
+        #       ", Selected node: ",targetNode.id , " Cpu util: ", targetNode.cpu_utilization, "Latency: ", targetNode.latency_array[self.mecApp.user_position - 1])
 
-        # algorithm
+        resourceCPUPenalty = max(0, self.mecApp.app_req_cpu - targetNode.cpu_available) / self.mecApp.app_req_cpu
+        resourceMEMPenalty = max(0, self.mecApp.app_req_memory - targetNode.memory_available) / 500
+        # latencyPenalty = max(0, targetNode.latency_array[self.mecApp.user_position-1]-self.mecApp.app_req_latency)/20
+        # Penalty = latencyPenalty+resourceMEMPenalty+resourceCPUPenalty
 
         if currentNode == targetNode:
             if self.mecApp.LatencyOK(targetNode):
-                reward = 1.5
+                print("Staying at the same MEC:", targetNode)
+                reward = self.calculateReward()
             else:
-                reward = -3
+                print("The same Cluster, Not relocated, bad latency")
+                reward = -100
+                self.done = True
         if currentNode != targetNode:
             if self.mecApp.ResourcesOK(targetNode):
                 if self.mecApp.LatencyOK(targetNode):
                     self._relocateApplication(currentNode, targetNode)
                     reward = self.calculateReward()
                 else:
-                    reward = -30
+                    print("New Cluster, Not relocated, bad latency")
+                    self.done = True
+                    reward = -100
             else:
                 if self.mecApp.LatencyOK(targetNode):
-                    reward = -30
+                    print("New Cluster, Not relocated, bad resources")
+                    self.done = True
+                    reward = -100
                 else:
-                    reward = -60
+                    print("New Cluster, Not relocated, bad latency, bad resources")
+                    self.done = True
+                    reward = -100
 
         if self.current_step >= len(self.trajectory):
             self.done = True
         else:
             self.mecApp.user_position = self.trajectory[self.current_step]
+            print("Moved towards cell: ", self.trajectory[self.current_step])
 
         # Update the state of the environment
         self.state = self.get_state()
 
+        self.reward_episode += reward
         # Return the new state, the reward, and whether the episode is finished
         return self.state, reward, self.done, {}
 
     def _relocateApplication(self, currentNode, targetNode):
-        """
-        :we are assuming that relocation MUST be finished with success, since the constraints are checked by agents and only allowed actions( latency OK, enough resources) are taken
-        :todo: check what is under "action", seems that actions are int within range [0, length(mec_nodes)], but should be : [1 , length(mec_nodes)], maybe some dictionary for action space?
-        :param action: currently action means the id of cluster where to relocate
-        :return: true if app has been moved, false if app stayed at the same cluster
-        """
 
-        # improved version
-        # OLD NODE
-        # take care of CPU
-        currentNode.cpu_utilization -= int(self.mecApp.app_req_cpu / currentNode.cpu_capacity * 100)
-        currentNode.cpu_available = currentNode.cpu_capacity - (
-                currentNode.cpu_capacity * currentNode.cpu_utilization / 100)
+        self.deleteApp(currentNode)
+        IsAppSuccasfullyInstantiated = self.instantiateApp(targetNode)
 
-        # take care of Memory
-        currentNode.memory_utilization -= int(self.mecApp.app_req_memory / currentNode.memory_capacity * 100)
-        currentNode.memory_available = currentNode.memory_capacity - (
-                currentNode.memory_capacity * currentNode.memory_utilization / 100)
+        if IsAppSuccasfullyInstantiated:
+            print("Relocated to MEC:  ", targetNode.id)
+            return True
 
-        # NEW NODE
-        # take care of CPU
-        targetNode.cpu_utilization += int(self.mecApp.app_req_cpu / targetNode.cpu_capacity * 100)
-        targetNode.cpu_available = targetNode.cpu_capacity - (
-                targetNode.cpu_capacity * targetNode.cpu_utilization / 100)
+        return False
 
-        # take care of Memory
-        targetNode.memory_utilization += int(self.mecApp.app_req_memory / targetNode.memory_capacity * 100)
-        targetNode.memory_available = targetNode.memory_capacity - (
-                targetNode.memory_capacity * targetNode.memory_utilization / 100)
+    def instantiateApp(self, mecNode):
+
+        mecNode.cpu_used += self.mecApp.app_req_cpu
+        mecNode.cpu_available -= self.mecApp.app_req_cpu
+        mecNode.cpu_utilization = int(mecNode.cpu_used / mecNode.cpu_capacity * 100)
+
+        mecNode.memory_used += self.mecApp.app_req_memory
+        mecNode.memory_available -= self.mecApp.app_req_memory
+        mecNode.memory_utilization = int(mecNode.memory_used / mecNode.memory_capacity * 100)
+
+        if mecNode.memory_utilization > 100 | mecNode.cpu_utilization > 100:
+            self.deleteApp(mecNode)
+            print("Error!", mecNode.id, "has not enough capacity to host this application!")
+            return False
 
         # Application update
-        self.mecApp.current_MEC = targetNode
-
+        self.mecApp.current_MEC = mecNode
         return True
+
+    def deleteApp(self, mecNode):
+        mecNode.cpu_used -= self.mecApp.app_req_cpu
+        mecNode.cpu_available += self.mecApp.app_req_cpu
+        mecNode.cpu_utilization = int(mecNode.cpu_used / mecNode.cpu_capacity * 100)
+
+        # take care of Memory
+        mecNode.memory_used -= self.mecApp.app_req_memory
+        mecNode.memory_available += self.mecApp.app_req_memory
+        mecNode.memory_utilization = int(mecNode.memory_used / mecNode.memory_capacity * 100)
+
+        self.mecApp.current_MEC = ""
 
     def calculateReward(self):
 
@@ -431,10 +466,14 @@ class MecNode:
         self.id = id
         self.cpu_capacity = cpu_capacity
         self.cpu_utilization = cpu_utilization
-        self.cpu_available = cpu_capacity - cpu_utilization / 100 * cpu_capacity
+        self.cpu_used = int(self.cpu_capacity * self.cpu_utilization / 100)
+        self.cpu_available = self.cpu_capacity - self.cpu_used
+
         self.memory_capacity = memory_capacity
         self.memory_utilization = memory_utilization
-        self.memory_available = memory_capacity - memory_utilization / 100 * memory_capacity
+        self.memory_used = int(self.memory_capacity * self.memory_utilization / 100)
+        self.memory_available = self.memory_capacity - self.memory_used
+
         self.latency_array = latency_array
         self.placement_cost = placement_cost
 
@@ -472,35 +511,47 @@ class MecApp:
         :return:
         """
         # if considered mec is a current mec for app esources are definitely true, no need to check
-        if mec == self.current_MEC:
+        if mec.id == self.current_MEC.id:
             return True
         if mec.cpu_available < self.app_req_cpu:
             # print("resources NOT OK. available CPU: ", mec.cpu_available, "while requested by app: ", self.app_req_cpu )
             # print("resources NOT OK. available MEM: ", mec.memory_available, "while requested by app: ", self.app_req_memory)
             return False
-        elif mec.memory_available < self.app_req_memory:
+        if mec.memory_available < self.app_req_memory:
             # print("resources NOT OK. available MEM: ", mec.memory_available, "while requested by app: ", self.app_req_memory )
             return False
-        elif mec.cpu_utilization <= self.tau * 100 and mec.memory_utilization <= self.tau * 100:
+        if (mec.cpu_utilization + self.app_req_cpu / mec.cpu_capacity * 100) <= self.tau * 100 and \
+                (mec.memory_utilization + self.app_req_memory / mec.memory_capacity * 100) <= self.tau * 100:
             # print("resources OK. ")
             return True
         else:
             # print("resources NOT OK. ")
             return False
 
-#
-max_trajectory_length = 25
-min_trajectory_length = 25
-initial_load = 'variable_load' # low (10-40%), medium(40-60%)), high(60-80%), random (10-80%), variable_load ( different initial load for each episode)
-
-# create environment
-
-erEnv = EdgeRelEnv("topoconfig.json", min_trajectory_length, max_trajectory_length, initial_load)
 # #
-# env = EdgeRelEnv("topoconfig.json")
-erEnv.reset()
-erEnv.step(1)
-erEnv.step(5)
-erEnv.step(10)
-# env.calculateReward2(True)
-# print(env.action_masks())
+# max_trajectory_length = 25
+# min_trajectory_length = 25
+# initial_load = 'variable_load' # low (10-40%), medium(40-60%)), high(60-80%), random (10-80%), variable_load ( different initial load for each episode)
+#
+# # create environment
+#
+# erEnv = EdgeRelEnv("topoconfig.json", min_trajectory_length, max_trajectory_length, initial_load)
+# # #
+# # env = EdgeRelEnv("topoconfig.json")
+# erEnv.reset()
+# erEnv.step(1)
+# erEnv.step(5)
+# erEnv.step(10)
+# # env.calculateReward2(True)
+# # print(env.action_masks())
+
+# Create an instance of the MecApp class
+# app = MecApp(app_req_cpu=2, app_req_memory=2048, app_req_latency=10, tau=1, user_position=(10, 20))
+#
+# # Accessing object attributes
+# print("CPU Requirement:", app.app_req_cpu)
+# print("Memory Requirement:", app.app_req_memory)
+# print("Latency Requirement:", app.app_req_latency)
+# print("Tau:", app.tau)
+# print("User Position:", app.user_position)
+# print("Current MEC:", app.current_MEC)
