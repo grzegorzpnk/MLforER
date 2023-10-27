@@ -502,7 +502,6 @@ class MecApp:
             # print(mec.id, "latencyNOToK. Lat oferred: ", mec.latency_array[self.user_position - 1], "while required by app: ", self.app_req_latency )
             return False
 
-    # todo: to be checked
     def ResourcesOK(self, mec):
         """
         This is supportive function to check resources conditions, used only for initial (for init state) placement of our main app.
