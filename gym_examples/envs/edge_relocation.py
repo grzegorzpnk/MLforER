@@ -38,33 +38,31 @@ class EdgeRelEnv(gym.Env):
 
         # Multi-Dimension Box that represent every MEC host, each represented by 5 attributea
         # : 1) CPU Capacity 2) CPU Utilization [%] 3) Memory Capacity 4) Memory Utilization [%] 5) Unit Cost
-        low_bound_mec = np.zeros((len(self.mec_nodes), 5))  # initialize a 3x5 array filled with zeros
-        low_bound_mec[:, 0] = 1  # Low bound of CPU Capacity is 1 ( == 4000 mvCPU)
-        low_bound_mec[:, 1] = 0  # Low bound of CPU Utilization is 0%
-        low_bound_mec[:, 2] = 1  # Low bound of Memory Capacity is 1 ( == 4000 Mb RAM)
-        low_bound_mec[:, 3] = 0  # Low bound of Memory Utilization is 0%
-        low_bound_mec[:, 4] = 1  # Low bound of unit cost is 1 ( == 0.33 == city-level)
+        low_bound_mec = np.zeros((len(self.mec_nodes), 4))  # initialize a 3x5 array filled with zeros
+        low_bound_mec[:, 0] = 0  # Low bound of CPU Utilization is 0%
+        low_bound_mec[:, 1] = 0  # Low bound of Memory Utilization is 0%
+        low_bound_mec[:, 2] = 1  # Low bound of unit cost is 1 ( == 0.33 == city-level)
+        low_bound_mec[:, 3] = 1  # offered latency towards current network Cell, todo: this should be continous float space, instead of int
 
-        high_bound_mec = np.ones((len(self.mec_nodes), 5))  # initialize a 3x5 array filled with zeros
-        high_bound_mec[:, 0] = 3  # High bound of CPU Capacity is 3 ( == 12000 mvCPU)
-        high_bound_mec[:, 1] = 100  # High bound of CPU Utilization is 100 [%]
-        high_bound_mec[:, 2] = 3  # High bound of Memory Capacity is 3 ( == 12000 Mb RAM)
-        high_bound_mec[:, 3] = 100  # High bound of Memory Utilization is 100 [%]
-        high_bound_mec[:, 4] = 3  # High bound of unit cost is 3 ( == 1 == international-level)
+        high_bound_mec = np.ones((len(self.mec_nodes), 4))  # initialize a 3x5 array filled with zeros
+        high_bound_mec[:, 0] = 100  # High bound of CPU Utilization is 100 [%]
+        high_bound_mec[:, 1] = 100  # High bound of Memory Utilization is 100 [%]
+        high_bound_mec[:, 2] = 3  # High bound of unit cost is 3 ( == 1 == international-level)
+        high_bound_mec[:, 3] = 30  # offered latency towards current network Cell
 
         # 1Dimension Box that represent single application attributea
         # 1) Required mvCPU 2) required Memory 3) Required Latency 4) Current MEC 5) Current RAN
         low_bound_app = np.ones((1, 5))  # initialize a 1x5 array filled with ones
         high_bound_app = np.ones((1, 5))  # initialize a 1x5 array filled with ones
-        high_bound_app[:, 0] = 500  # high bound of required mvCPU # 1:500, 2:600, 3:700... 6:1000
-        high_bound_app[:, 1] = 500  # high bound of required Memory #1:500, 2:600, 3:700... 6:1000
-        high_bound_app[:, 2] = 3  # high bound of Required Latency 1:10, 2:15, 3:30
+        high_bound_app[:, 0] = 25  # high bound of required mvCPU # 1:500, 2:600, 3:700... 6:1000
+        high_bound_app[:, 1] = 25  # high bound of required Memory #1:500, 2:600, 3:700... 6:1000
+        high_bound_app[:, 2] = 15  # high bound of Required Latency 1:10, 2:15, 3:30
         high_bound_app[:, 3] = len(self.mec_nodes)  # high bound of CurrentMEC
         high_bound_app[:, 4] = self.number_of_RANs  # high bound of CurrentRAN
 
         self.observation_space = gym.spaces.dict.Dict(
             {
-                # MEC(for MEC each)    : 1) CPU Capacity 2) CPU Utilization [%] 3) Memory Capacity 4) Memory Utilization [%] 5) Unit Cost
+                # MEC(for MEC each)    : 1) CPU Utilization [%] 2) Memory Utilization [%] 3) Unit Cost 4) offered latency towards current network Cell
                 # APP(for single app)  : 1) Required mvCPU 2) required Memory 3) Required Latency 4) Current MEC 5) Current RAN
                 "space_MEC": gym.spaces.Box(shape=low_bound_mec.shape, dtype=np.int32, low=low_bound_mec,
                                             high=high_bound_mec),
@@ -73,22 +71,116 @@ class EdgeRelEnv(gym.Env):
             }
         )
 
+    def reset(self):
+
+        # summarize what was achieved in previouse episode
+        print("Cummulate reward:", self.reward_episode)
+
+        # let's recreate all environement
+        self.done = False
+        self.reward_episode = 0
+        self.current_step = 1
+        self.episodes_counter += 1
+        print("\n")
+        print(self.episodes_counter, "New episode")
+
+        # generate initial load
+        self._generateInitialLoadForTopology()
+
+        # generate trajectory
+        self.trajectory = self._generateTrajectory()
+
+        # generateApp
+        self.mecApp = self._generateMECApp()
+        self.mecApp.current_MEC = self._selectStartingNode()
+        while self.mecApp.current_MEC is None:
+            print("Cannot find any initial cluster for app. Generating new initial load")
+            self.trajectory = self._generateTrajectory()
+            self.mecApp = self._generateMECApp()
+            self.mecApp.current_MEC = self._selectStartingNode()
+
+        self.mecApp.user_position = self.trajectory[self.current_step]
+        print("Moved towards cell: ", self.trajectory[self.current_step])
+
+        self.state = self.get_state()
+
+        return self.state
+
+    def step(self, action):
+
+        action += 1  # + 1 because gym implements action space as a discrete 0,1,2,.., we need to update for MEC ID: 1,2,3...
+        self.current_step += 1
+
+        # check first if selected MEC is a current MEC
+        currentNode = self._getMecNodeByID(self.mecApp.current_MEC.id)
+        targetNode = self._getMecNodeByID("mec" + str(action))
+
+        # print(self.current_step,". Current node:", currentNode.id, " Cpu util: ", currentNode.cpu_utilization, "Latency: ", currentNode.latency_array[self.mecApp.user_position - 1],
+        #       ", Selected node: ",targetNode.id , " Cpu util: ", targetNode.cpu_utilization, "Latency: ", targetNode.latency_array[self.mecApp.user_position - 1])
+
+        resourceCPUPenalty = max(0, self.mecApp.app_req_cpu - targetNode.cpu_available) / self.mecApp.app_req_cpu
+        resourceMEMPenalty = max(0, self.mecApp.app_req_memory - targetNode.memory_available) / self.mecApp.app_req_memory
+        latencyReward = (self.mecApp.app_req_latency - targetNode.latency_array[self.mecApp.user_position - 1]) / self.mecApp.app_req_latency
+
+
+        # Penalty = latencyPenalty+resourceMEMPenalty+resourceCPUPenalty
+        reward = 0
+        k_lat = 10
+        k_res = 5
+
+        if currentNode == targetNode:
+            if self.mecApp.LatencyOK(targetNode):
+                print("Staying at the same MEC:", targetNode)
+                reward += 3
+            else:
+                print("The same Cluster, Not relocated, bad latency")
+                reward += k_lat*latencyReward
+        elif currentNode != targetNode:
+            if self.mecApp.ResourcesOK(targetNode):
+                if self.mecApp.LatencyOK(targetNode):
+                    self._relocateApplication(currentNode, targetNode)
+                    reward = self.calculateReward()
+                else:
+                    print("New Cluster, Not relocated, bad latency")
+                    reward += self.calculateReward()
+                    reward = k_lat*latencyPenalty
+            else:
+                reward += -(k_res * resourceCPUPenalty)
+                reward += -(k_res * resourceMEMPenalty)
+                if self.mecApp.LatencyOK(targetNode):
+                    print("New Cluster, Not relocated, bad resources")
+                else:
+                    print("New Cluster, Not relocated, bad latency, bad resources")
+                    reward += k_lat*latencyPenalty
+
+        if self.current_step >= len(self.trajectory):
+            self.done = True
+        else:
+            self.mecApp.user_position = self.trajectory[self.current_step]
+            print("Moved towards cell: ", self.trajectory[self.current_step])
+
+        # Update the state of the environment
+        self.state = self.get_state()
+
+        self.reward_episode += reward
+        # Return the new state, the reward, and whether the episode is finished
+        return self.state, reward, self.done, {}
+
     def get_state(self):
 
-        space_MEC = np.zeros((len(self.mec_nodes), 5))
+        space_MEC = np.zeros((len(self.mec_nodes), 4))
 
         # MEC  : 0) CPU Capacity 1) CPU Utilization [%] 2) Memory Capacity 3) Memory Utilization [%] 4) Unit Cost
         for i, mec_node in enumerate(self.mec_nodes):
-            space_MEC[i, 0] = self.determineStateOfCapacity(mec_node.cpu_capacity)
-            space_MEC[i, 1] = mec_node.cpu_utilization
-            space_MEC[i, 2] = self.determineStateOfCapacity(mec_node.memory_capacity)
-            space_MEC[i, 3] = mec_node.memory_utilization
-            space_MEC[i, 4] = self.determineStateofCost(mec_node.placement_cost)
+            space_MEC[i, 0] = mec_node.cpu_utilization
+            space_MEC[i, 1] = mec_node.memory_utilization
+            space_MEC[i, 2] = self.determineStateofCost(mec_node.placement_cost)
+            space_MEC[i, 3] = int(mec_node.latency_array[self.mecApp.user_position - 1])
 
         # APP  : [0,1] Required mvCPU  [0,2] required Memory [0,3] Required Latency [0,4] Current MEC [0,5] Current RAN
         space_App = np.ones((1, 5))
-        space_App[0, 0] = self.determineReqRes(self.mecApp.app_req_cpu)
-        space_App[0, 1] = self.determineReqRes(self.mecApp.app_req_memory)
+        space_App[0, 0] = self.determineReqResInEdgeContext(self.mecApp.app_req_cpu)
+        space_App[0, 1] = self.determineReqResInEdgeContext(self.mecApp.app_req_memory)
         space_App[0, 2] = self.determineStateofAppLatReq(self.mecApp.app_req_latency)
         space_App[0, 3] = self.determineMecID(self.mecApp.current_MEC.id)
         space_App[0, 4] = self.mecApp.user_position
@@ -100,22 +192,16 @@ class EdgeRelEnv(gym.Env):
 
     def determineReqRes(self, reqRes):
         return reqRes - 500
-        # res_map = {500: 1, 600: 2, 700: 3, 800: 4, 900: 5, 1000: 6}
-        # return res_map.get(reqRes, 0)
 
-    def determineStateOfCapacity(self, capacityValue):
-        capacity_map = {4000: 1, 8000: 2, 12000: 3}
-        return capacity_map.get(capacityValue)
+    def determineReqResInEdgeContext(self, reqRes):
+        return int(reqRes / self.mecApp.current_MEC.cpu_capacity)
 
     def determineStateofCost(self, placement_cost):
         cost_map = {0.33334: 1, 0.66667: 2, 1: 3}
         return cost_map.get(placement_cost, 0)
 
     def determineStateofAppLatReq(self, latValue):
-        # lat_map = {10: 1, 15: 2, 30: 3}
-        lat_map = {10: 1, 15: 2, 30: 3}
-
-        return lat_map.get(latValue, 0)
+        return self.mecApp.app_req_latency
 
     def determineMecID(self, mecName):
         return int(mecName[3:])
@@ -205,7 +291,7 @@ class EdgeRelEnv(gym.Env):
             _min = 40
             _max = 60
         elif current_scenario == "high":
-            _min = 60
+            _min = 50
             _max = 80
         elif current_scenario == "additional":
             _min = 40
@@ -246,98 +332,6 @@ class EdgeRelEnv(gym.Env):
             if cnt > 1000:
                 return None
             cnt += 1
-
-    def reset(self):
-
-        # summarize what was achieved in previouse episode
-        print("Cummulate reward:", self.reward_episode)
-
-        # let's recreate all environement
-        self.done = False
-        self.reward_episode = 0
-        self.current_step = 1
-        self.episodes_counter += 1
-        print("\n")
-        print(self.episodes_counter, "New episode")
-
-        # generate initial load
-        self._generateInitialLoadForTopology()
-
-        # generate trajectory
-        self.trajectory = self._generateTrajectory()
-
-        # generateApp
-        self.mecApp = self._generateMECApp()
-        self.mecApp.current_MEC = self._selectStartingNode()
-        while self.mecApp.current_MEC is None:
-            print("Cannot find any initial cluster for app. Generating new initial load")
-            self.trajectory = self._generateTrajectory()
-            self.mecApp = self._generateMECApp()
-            self.mecApp.current_MEC = self._selectStartingNode()
-
-        self.mecApp.user_position = self.trajectory[self.current_step]
-        print("Moved towards cell: ", self.trajectory[self.current_step])
-
-        self.state = self.get_state()
-
-        return self.state
-
-    def step(self, action):
-
-        action += 1  # + 1 because gym implements action space as a discrete 0,1,2,.., we need to update for MEC ID: 1,2,3...
-        self.current_step += 1
-
-        # check first if selected MEC is a current MEC
-        currentNode = self._getMecNodeByID(self.mecApp.current_MEC.id)
-        targetNode = self._getMecNodeByID("mec" + str(action))
-
-        # print(self.current_step,". Current node:", currentNode.id, " Cpu util: ", currentNode.cpu_utilization, "Latency: ", currentNode.latency_array[self.mecApp.user_position - 1],
-        #       ", Selected node: ",targetNode.id , " Cpu util: ", targetNode.cpu_utilization, "Latency: ", targetNode.latency_array[self.mecApp.user_position - 1])
-
-        # resourceCPUPenalty = max(0, self.mecApp.app_req_cpu - targetNode.cpu_available) / self.mecApp.app_req_cpu
-        # resourceMEMPenalty = max(0, self.mecApp.app_req_memory - targetNode.memory_available) / 500
-        # latencyPenalty = max(0, targetNode.latency_array[self.mecApp.user_position-1]-self.mecApp.app_req_latency)/20
-        # Penalty = latencyPenalty+resourceMEMPenalty+resourceCPUPenalty
-
-        if currentNode == targetNode:
-            if self.mecApp.LatencyOK(targetNode):
-                print("Staying at the same MEC:", targetNode)
-                reward = self.calculateReward()
-            else:
-                print("The same Cluster, Not relocated, bad latency")
-                reward = -100
-                self.done = True
-        if currentNode != targetNode:
-            if self.mecApp.ResourcesOK(targetNode):
-                if self.mecApp.LatencyOK(targetNode):
-                    self._relocateApplication(currentNode, targetNode)
-                    reward = self.calculateReward()
-                else:
-                    print("New Cluster, Not relocated, bad latency")
-                    self.done = True
-                    reward = -100
-            else:
-                if self.mecApp.LatencyOK(targetNode):
-                    print("New Cluster, Not relocated, bad resources")
-                    self.done = True
-                    reward = -100
-                else:
-                    print("New Cluster, Not relocated, bad latency, bad resources")
-                    self.done = True
-                    reward = -100
-
-        if self.current_step >= len(self.trajectory):
-            self.done = True
-        else:
-            self.mecApp.user_position = self.trajectory[self.current_step]
-            print("Moved towards cell: ", self.trajectory[self.current_step])
-
-        # Update the state of the environment
-        self.state = self.get_state()
-
-        self.reward_episode += reward
-        # Return the new state, the reward, and whether the episode is finished
-        return self.state, reward, self.done, {}
 
     def _relocateApplication(self, currentNode, targetNode):
 
@@ -476,12 +470,6 @@ class MecApp:
         self.current_MEC = None
 
     def LatencyOK(self, mec):
-        """
-        This is supportive funtion to check latency conditions, used only for initial (for init state) placement of our main app.
-        This func is not used to check conditions during the relocation, since it;s responisibility of agent
-        :param mec:
-        :return:
-        """
         # -1 cause latency_array[0] refers to the cell 1 etc..
         if mec.latency_array[self.user_position - 1] < self.app_req_latency:
             # print(mec.id, "latencyOK. Lat oferred: ", mec.latency_array[self.user_position - 1], "while required by app: ", self.app_req_latency )
@@ -491,14 +479,8 @@ class MecApp:
             return False
 
     def ResourcesOK(self, mec):
-        """
-        This is supportive function to check resources conditions, used only for initial (for init state) placement of our main app.
-        This func is not used to check conditions during the relocation, since it;s responisibility of agent
-        :param mec:
-        :return:
-        """
         # if considered mec is a current mec for app esources are definitely true, no need to check
-        if mec.id == self.current_MEC.id:
+        if mec == self.current_MEC:
             return True
         if mec.cpu_available < self.app_req_cpu:
             # print("resources NOT OK. available CPU: ", mec.cpu_available, "while requested by app: ", self.app_req_cpu )
